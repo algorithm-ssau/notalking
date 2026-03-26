@@ -1,0 +1,17 @@
+[package]
+name = "notalking"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+members = ["crates/editor"]
+resolver = "2"
+
+[workspace.dependencies]
+chrono = "0.4.44"
+uuid = "1.22.0"
+
+[dependencies]
+chrono = { workspace = true }
+uuid = { workspace = true }
+editor = { path = "crates/editor" }
