@@ -9,9 +9,15 @@ resolver = "2"
 
 [workspace.dependencies]
 chrono = "0.4.44"
-uuid = "1.22.0"
+uuid = { version = "1.22.0", features = ["v4"] }
 
 [dependencies]
+tokio = { version = "1.50.0", features = ["full"] }
+axum = "0.8.8"
 chrono = { workspace = true }
 uuid = { workspace = true }
 editor = { path = "crates/editor" }
+sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
+serde = { version = "1.0.228", features = ["derive"] }
+log = "0.4.29"
+env_logger = "0.11.10"
