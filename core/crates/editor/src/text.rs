@@ -1,36 +1,39 @@
 use std::collections::HashMap;
 
-#[derive(Debug)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum DeleteDirection {
     Backward,
     Forward,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct FormattingStatus {
     pub is_set: bool,
     pub is_mixed: bool,
     pub value: Option<FormatValue>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FormatValue {
     Bool(bool),
     String(String),
 }
 
-#[warn(unused)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TextBlock {
     chunks: Vec<Chunk>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Chunk {
     pub text: String,
     pub style: Style,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 pub struct Style {
     pub bold: Option<bool>,
     pub italic: Option<bool>,
