@@ -230,6 +230,8 @@ fn style_from_patch(nested: Option<StyleDto>, loose: LooseStyleFields) -> Style 
 pub enum BlockPatchBody {
     Move {
         after_id: Option<String>,
+        #[serde(default)]
+        before_id: Option<String>,
     },
     InsertText {
         position: usize,
@@ -701,10 +703,13 @@ pub async fn patch_note_block_handler(
     })?;
 
     match payload {
-        BlockPatchBody::Move { after_id } => {
-            let after_uuid = match after_id {
+        BlockPatchBody::Move {
+            after_id,
+            before_id,
+        } => {
+            let after_uuid = match &after_id {
                 None => None,
-                Some(s) => Some(Uuid::parse_str(&s).map_err(|_| {
+                Some(s) => Some(Uuid::parse_str(s).map_err(|_| {
                     (
                         StatusCode::BAD_REQUEST,
                         Json(ErrorResponse {
@@ -714,9 +719,27 @@ pub async fn patch_note_block_handler(
                     )
                 })?),
             };
+            let before_uuid = match &before_id {
+                None => None,
+                Some(s) => Some(Uuid::parse_str(s).map_err(|_| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(ErrorResponse {
+                            error: "invalid before_id".to_owned(),
+                            hint: None,
+                        }),
+                    )
+                })?),
+            };
             state
                 .note
-                .move_block(session.user_id, note_id, block_id, after_uuid)
+                .move_block(
+                    session.user_id,
+                    note_id,
+                    block_id,
+                    after_uuid,
+                    before_uuid,
+                )
                 .await
                 .map_err(map_note_error)?;
         }

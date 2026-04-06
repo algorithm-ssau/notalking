@@ -69,6 +69,7 @@ pub trait NoteUsecase {
         note_id: Uuid,
         block_id: Uuid,
         after_id: Option<Uuid>,
+        before_id: Option<Uuid>,
     ) -> Result<(), NoteError>;
     async fn apply_text_patch(
         &self,

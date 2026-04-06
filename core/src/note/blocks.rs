@@ -268,6 +268,88 @@ impl LoadedNoteBlocks {
         Ok(())
     }
 
+    /// Moves `block_id` so it sits immediately before `before_id`.
+    pub fn move_block_before(
+        &mut self,
+        block_id: Uuid,
+        before_id: Uuid,
+        now: DateTime<Utc>,
+    ) -> Result<(), NoteError> {
+        if !self.blocks.contains_key(&block_id) {
+            return Err(NoteError::BlockNotFound);
+        }
+        if !self.blocks.contains_key(&before_id) {
+            return Err(NoteError::BlockNotFound);
+        }
+        if block_id == before_id {
+            return Err(NoteError::InvalidOperation);
+        }
+
+        let already_before = self
+            .blocks
+            .get(&block_id)
+            .ok_or(NoteError::BlockNotFound)?
+            .next_id
+            == Some(before_id);
+        if already_before {
+            return Ok(());
+        }
+
+        let (prev, next) = {
+            let b = self.blocks.get(&block_id).ok_or(NoteError::BlockNotFound)?;
+            (b.prev_id, b.next_id)
+        };
+
+        if Some(block_id) == self.head_id {
+            self.head_id = next;
+        }
+        if let Some(pid) = prev {
+            if let Some(p) = self.blocks.get_mut(&pid) {
+                p.next_id = next;
+                p.updated_at = now;
+            }
+        }
+        if let Some(nid) = next {
+            if let Some(n) = self.blocks.get_mut(&nid) {
+                n.prev_id = prev;
+                n.updated_at = now;
+            }
+        }
+
+        {
+            let b = self.blocks.get_mut(&block_id).ok_or(NoteError::BlockNotFound)?;
+            b.prev_id = None;
+            b.next_id = None;
+            b.updated_at = now;
+        }
+
+        let before_prev = self
+            .blocks
+            .get(&before_id)
+            .ok_or(NoteError::BlockNotFound)?
+            .prev_id;
+
+        {
+            let b = self.blocks.get_mut(&block_id).ok_or(NoteError::BlockNotFound)?;
+            b.prev_id = before_prev;
+            b.next_id = Some(before_id);
+            b.updated_at = now;
+        }
+        if let Some(pid) = before_prev {
+            if let Some(p) = self.blocks.get_mut(&pid) {
+                p.next_id = Some(block_id);
+                p.updated_at = now;
+            }
+        } else {
+            self.head_id = Some(block_id);
+        }
+        if let Some(before) = self.blocks.get_mut(&before_id) {
+            before.prev_id = Some(block_id);
+            before.updated_at = now;
+        }
+        Ok(())
+    }
+
     pub fn text_mut(&mut self, block_id: Uuid, now: DateTime<Utc>) -> Result<&mut TextBlock, NoteError> {
         let block = self.blocks.get_mut(&block_id).ok_or(NoteError::BlockNotFound)?;
         block.updated_at = now;

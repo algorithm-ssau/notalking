@@ -62,6 +62,11 @@ impl Style {
     }
 }
 
+#[inline]
+fn char_len(s: &str) -> usize {
+    s.chars().count()
+}
+
 impl TextBlock {
     pub fn new() -> Self {
         Self { chunks: Vec::new() }
@@ -80,8 +85,9 @@ impl TextBlock {
         }
     }
 
+    /// Total length in **Unicode scalar values** (Rust `char` count), matching typical JS `[...str].length`.
     pub fn len(&self) -> usize {
-        self.chunks.iter().map(|c| c.text.len()).sum()
+        self.chunks.iter().map(|c| char_len(&c.text)).sum()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -109,7 +115,8 @@ impl TextBlock {
             return;
         }
 
-        if position >= self.len() {
+        let total_len = self.len();
+        if position >= total_len {
             if let Some(last) = self.chunks.last_mut() {
                 if last.style == style {
                     last.text.push_str(text);
@@ -125,15 +132,24 @@ impl TextBlock {
         }
 
         if let Some((idx, _, local)) = self.find_chunk_at(position) {
-            self.split_at(idx, local);
-
-            self.chunks.insert(
-                idx + 1,
-                Chunk {
-                    text: text.to_string(),
-                    style,
-                },
-            );
+            if local > 0 {
+                self.split_at(idx, local);
+                self.chunks.insert(
+                    idx + 1,
+                    Chunk {
+                        text: text.to_string(),
+                        style,
+                    },
+                );
+            } else {
+                self.chunks.insert(
+                    idx,
+                    Chunk {
+                        text: text.to_string(),
+                        style,
+                    },
+                );
+            }
         }
 
         self.merge();
@@ -156,7 +172,8 @@ impl TextBlock {
 
         let mut pos = 0;
         self.chunks.retain(|chunk| {
-            let next = pos + chunk.text.len();
+            let n = char_len(&chunk.text);
+            let next = pos + n;
             let keep = !(pos >= start && next <= end);
             pos = next;
             keep
@@ -204,7 +221,8 @@ impl TextBlock {
         let mut pos = 0;
 
         for chunk in &mut self.chunks {
-            let next = pos + chunk.text.len();
+            let n = char_len(&chunk.text);
+            let next = pos + n;
 
             if next > start && pos < end {
                 if enable {
@@ -236,7 +254,8 @@ impl TextBlock {
         let mut pos = 0;
 
         for chunk in &self.chunks {
-            let next = pos + chunk.text.len();
+            let n = char_len(&chunk.text);
+            let next = pos + n;
 
             if next > start && pos < end {
                 bold_vals.push(chunk.style.bold);
@@ -256,33 +275,43 @@ impl TextBlock {
         map
     }
 
+    /// `pos` is a **Unicode scalar index** from the start of the document.
     fn find_chunk_at(&self, pos: usize) -> Option<(usize, &Chunk, usize)> {
-        let mut offset = 0;
+        let mut offset_chars = 0;
 
         for (i, chunk) in self.chunks.iter().enumerate() {
-            let next = offset + chunk.text.len();
+            let n = char_len(&chunk.text);
+            let next = offset_chars + n;
             if pos < next {
-                return Some((i, chunk, pos - offset));
+                return Some((i, chunk, pos - offset_chars));
             }
-            offset = next;
+            offset_chars = next;
         }
 
         None
     }
 
+    /// `local` is a **Unicode scalar index** within `chunks[idx].text`.
     fn split_at(&mut self, idx: usize, local: usize) {
         if idx >= self.chunks.len() {
             return;
         }
 
         let chunk = self.chunks[idx].clone();
-
-        if local == 0 || local >= chunk.text.len() {
+        let char_count = char_len(&chunk.text);
+        if local == 0 || local >= char_count {
             return;
         }
 
-        let left = chunk.text[..local].to_string();
-        let right = chunk.text[local..].to_string();
+        let split_byte = chunk
+            .text
+            .char_indices()
+            .nth(local)
+            .map(|(b, _)| b)
+            .unwrap_or(chunk.text.len());
+
+        let left = chunk.text[..split_byte].to_string();
+        let right = chunk.text[split_byte..].to_string();
 
         self.chunks[idx].text = left;
 
@@ -347,5 +376,31 @@ fn analyze_string(values: Vec<Option<String>>) -> FormattingStatus {
         } else {
             Some(FormatValue::String(set_vals[0].clone()))
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn insert_after_cyrillic_does_not_panic() {
+        let mut tb = TextBlock::from_text("п");
+        tb.insert_text(1, "р", Style::new());
+        assert_eq!(tb.to_plain_text(), "пр");
+    }
+
+    #[test]
+    fn delete_range_cyrillic() {
+        let mut tb = TextBlock::from_text("привет");
+        tb.delete_range(1, 3);
+        assert_eq!(tb.to_plain_text(), "пвет");
+    }
+
+    #[test]
+    fn insert_at_document_start() {
+        let mut tb = TextBlock::from_text("bc");
+        tb.insert_text(0, "a", Style::new());
+        assert_eq!(tb.to_plain_text(), "abc");
     }
 }

@@ -157,11 +157,16 @@ where
         note_id: Uuid,
         block_id: Uuid,
         after_id: Option<Uuid>,
+        before_id: Option<Uuid>,
     ) -> Result<(), NoteError> {
         let note = self.ensure_note_owner(user_id, note_id).await?;
         let now = Utc::now();
         let mut loaded = self.load_blocks(note_id).await?;
-        loaded.move_block_after(block_id, after_id, now)?;
+        match (after_id, before_id) {
+            (Some(_), Some(_)) => return Err(NoteError::InvalidInput),
+            (_, Some(before)) => loaded.move_block_before(block_id, before, now)?,
+            (after, None) => loaded.move_block_after(block_id, after, now)?,
+        }
         self.save_blocks(note_id, loaded).await?;
         self.touch_note(note).await?;
         Ok(())
