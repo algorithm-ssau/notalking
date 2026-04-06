@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@theme {
+    --font-family-default: "Inter", system-ui, -apple-system, sans-serif;
+    --font-family-rounded: "Open Runde", system-ui, -apple-system, sans-serif;
+
+    --font-default: var(--font-family-default);
+    --font-rounded: var(--font-family-rounded);
+
+    --color-bg-base: var(--color-bg-base);
+    --color-bg-raised: var(--color-bg-raised);
+    --color-bg-elevated: var(--color-bg-elevated);
+    --color-bg-overlay: var(--color-bg-overlay);
+    --color-bg-float: var(--color-bg-float);
+
+    --color-fg-primary: var(--color-fg-primary);
+    --color-fg-secondary: var(--color-fg-secondary);
+    --color-fg-tertiary: var(--color-fg-tertiary);
+    --color-fg-muted: var(--color-fg-muted);
+    --color-fg-subtle: var(--color-fg-subtle);
+
+    --color-green: var(--color-green);
+    --color-red: var(--color-red);
+    --color-yellow: var(--color-yellow);
+    --color-blue: var(--color-blue);
+
+    --duration-fast: var(--duration-fast);
+    --duration-slow: var(--duration-slow);
+}

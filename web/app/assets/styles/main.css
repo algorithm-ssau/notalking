@@ -1,0 +1,30 @@
+@import "./fonts.css";
+@import "./tailwind.css";
+
+:root {
+    --color-bg-base: #09090b;
+    --color-bg-raised: #151619;
+    --color-bg-elevated: #1e2024;
+    --color-bg-overlay: #272a30;
+    --color-bg-float: #30343b;
+
+    --color-fg-primary: #f4f5f6;
+    --color-fg-secondary: #c7ccd1;
+    --color-fg-tertiary: #9aa3ac;
+    --color-fg-muted: #6e7a86;
+    --color-fg-subtle: #4a525a;
+
+    --color-green: #27ae60;
+    --color-red: #e74c3c;
+    --color-yellow: #f1c40f;
+    --color-blue: #0f66f5;
+
+    --duration-fast: 120ms;
+    --duration-slow: 240ms;
+}
+
+body {
+    background-color: var(--color-bg-base);
+    color: var(--color-fg-primary);
+    font-family: var(--font-family-default);
+}
