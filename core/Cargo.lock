@@ -228,6 +228,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -353,6 +354,7 @@ name = "editor"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "serde",
  "uuid",
 ]
 
@@ -1019,6 +1021,7 @@ dependencies = [
  "env_logger",
  "log",
  "serde",
+ "serde_json",
  "sqlx",
  "tokio",
  "uuid",
@@ -2035,6 +2038,7 @@ checksum = "a68d3c8f01c0cfa54a75291d83601161799e4a89a39e0929f4b0354d88757a37"
 dependencies = [
  "getrandom 0.4.2",
  "js-sys",
+ "serde_core",
  "wasm-bindgen",
 ]
 

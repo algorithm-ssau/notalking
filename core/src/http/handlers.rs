@@ -14,7 +14,9 @@ use crate::auth::{
     AuthError, AuthUsecase, CloseOtherSessionsInput, CloseSessionInput, ListSessionsInput,
     LoginInput, LogoutInput, ManagedSessionView, RegisterInput,
 };
-use crate::note::{CreateNoteInput, DeleteNoteInput, NoteError, NoteUsecase};
+use crate::note::{CreateNoteInput, DeleteNoteInput, NoteError, NoteUsecase, TextPatch};
+use editor::content::Content;
+use editor::text::Style;
 
 use super::state::AppState;
 
@@ -64,6 +66,7 @@ pub struct CloseOtherSessionsResponse {
 #[derive(Deserialize)]
 pub struct CreateNoteRequest {
     pub title: String,
+    #[serde(default)]
     pub body: String,
 }
 
@@ -71,7 +74,6 @@ pub struct CreateNoteRequest {
 pub struct NoteResponse {
     pub id: String,
     pub title: String,
-    pub body: String,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -122,6 +124,9 @@ fn map_note_error(error: NoteError) -> (StatusCode, Json<ErrorResponse>) {
         NoteError::InvalidInput => (StatusCode::BAD_REQUEST, "invalid note input"),
         NoteError::NotFound => (StatusCode::NOT_FOUND, "note not found"),
         NoteError::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
+        NoteError::BlockNotFound => (StatusCode::NOT_FOUND, "block not found"),
+        NoteError::CorruptBlocks => (StatusCode::INTERNAL_SERVER_ERROR, "note blocks are missing or invalid"),
+        NoteError::InvalidOperation => (StatusCode::BAD_REQUEST, "invalid block operation"),
         NoteError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal error"),
     };
 
@@ -157,10 +162,109 @@ fn into_note_response(note: crate::note::Note) -> NoteResponse {
     NoteResponse {
         id: note.id.to_string(),
         title: note.title,
-        body: note.body,
         created_at: note.created_at.to_rfc3339(),
         updated_at: note.updated_at.to_rfc3339(),
     }
+}
+
+#[derive(Serialize)]
+pub struct NoteBlocksResponse {
+    pub blocks: Vec<serde_json::Value>,
+}
+
+#[derive(Deserialize)]
+pub struct CreateBlockRequest {
+    pub after_id: Option<String>,
+    #[serde(flatten)]
+    pub content: CreateBlockContent,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum CreateBlockContent {
+    Text {
+        #[serde(default)]
+        text: String,
+    },
+}
+
+#[derive(Deserialize, Default)]
+pub struct StyleDto {
+    bold: Option<bool>,
+    italic: Option<bool>,
+    color: Option<String>,
+}
+
+impl From<StyleDto> for Style {
+    fn from(d: StyleDto) -> Self {
+        Style {
+            bold: d.bold,
+            italic: d.italic,
+            color: d.color,
+        }
+    }
+}
+
+/// Optional `bold` / `italic` / `color` at the same JSON level as `op` (in addition to nested `style`).
+#[derive(Deserialize, Default)]
+pub struct LooseStyleFields {
+    #[serde(default)]
+    bold: Option<bool>,
+    #[serde(default)]
+    italic: Option<bool>,
+    #[serde(default)]
+    color: Option<String>,
+}
+
+fn style_from_patch(nested: Option<StyleDto>, loose: LooseStyleFields) -> Style {
+    let n = nested.unwrap_or_default();
+    Style {
+        bold: loose.bold.or(n.bold),
+        italic: loose.italic.or(n.italic),
+        color: loose.color.or(n.color),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "op", rename_all = "snake_case")]
+pub enum BlockPatchBody {
+    Move {
+        after_id: Option<String>,
+        #[serde(default)]
+        before_id: Option<String>,
+    },
+    InsertText {
+        position: usize,
+        text: String,
+        #[serde(default)]
+        style: Option<StyleDto>,
+        #[serde(flatten)]
+        loose: LooseStyleFields,
+    },
+    DeleteRange {
+        start: usize,
+        end: usize,
+    },
+    DeleteAt {
+        position: usize,
+        direction: editor::text::DeleteDirection,
+    },
+    EnableFormatting {
+        start: usize,
+        end: usize,
+        #[serde(default)]
+        style: Option<StyleDto>,
+        #[serde(flatten)]
+        loose: LooseStyleFields,
+    },
+    DisableFormatting {
+        start: usize,
+        end: usize,
+        #[serde(default)]
+        style: Option<StyleDto>,
+        #[serde(flatten)]
+        loose: LooseStyleFields,
+    },
 }
 
 const SESSION_COOKIE_NAME: &str = "session_id";
@@ -350,7 +454,7 @@ pub async fn create_note_handler(
         .create_note(CreateNoteInput {
             user_id: session.user_id,
             title: payload.title,
-            body: payload.body,
+            initial_text: payload.body,
         })
         .await
         .map_err(map_note_error)?;
@@ -431,6 +535,308 @@ pub async fn delete_note_handler(
         })
         .await
         .map_err(map_note_error)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn list_note_blocks_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(note_id): Path<String>,
+) -> Result<Json<NoteBlocksResponse>, (StatusCode, Json<ErrorResponse>)> {
+    let session_id = session_id_from_cookie(&headers)?;
+    let session = state
+        .auth
+        .authorize_session(session_id)
+        .await
+        .map_err(map_auth_error)?;
+    let note_id = Uuid::parse_str(&note_id).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid note id".to_owned(),
+                hint: None,
+            }),
+        )
+    })?;
+
+    let blocks = state
+        .note
+        .list_blocks(session.user_id, note_id)
+        .await
+        .map_err(map_note_error)?;
+
+    let json_blocks: Vec<serde_json::Value> = blocks
+        .into_iter()
+        .map(|b| serde_json::to_value(b).unwrap_or(serde_json::Value::Null))
+        .collect();
+
+    Ok(Json(NoteBlocksResponse { blocks: json_blocks }))
+}
+
+pub async fn create_note_block_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(note_id): Path<String>,
+    Json(payload): Json<CreateBlockRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<ErrorResponse>)> {
+    let session_id = session_id_from_cookie(&headers)?;
+    let session = state
+        .auth
+        .authorize_session(session_id)
+        .await
+        .map_err(map_auth_error)?;
+    let note_id = Uuid::parse_str(&note_id).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid note id".to_owned(),
+                hint: None,
+            }),
+        )
+    })?;
+
+    let after_id = match &payload.after_id {
+        None => None,
+        Some(s) => Some(Uuid::parse_str(s).map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    error: "invalid after_id".to_owned(),
+                    hint: None,
+                }),
+            )
+        })?),
+    };
+
+    let content = match payload.content {
+        CreateBlockContent::Text { text } => Content::Text(editor::text::TextBlock::from_text(&text)),
+    };
+
+    let block = state
+        .note
+        .create_block(session.user_id, note_id, after_id, content)
+        .await
+        .map_err(map_note_error)?;
+
+    let body = serde_json::to_value(block).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "failed to serialize block".to_owned(),
+                hint: None,
+            }),
+        )
+    })?;
+
+    Ok((StatusCode::CREATED, Json(body)))
+}
+
+pub async fn delete_note_block_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((note_id, block_id)): Path<(String, String)>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    let session_id = session_id_from_cookie(&headers)?;
+    let session = state
+        .auth
+        .authorize_session(session_id)
+        .await
+        .map_err(map_auth_error)?;
+    let note_id = Uuid::parse_str(&note_id).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid note id".to_owned(),
+                hint: None,
+            }),
+        )
+    })?;
+    let block_id = Uuid::parse_str(&block_id).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid block id".to_owned(),
+                hint: None,
+            }),
+        )
+    })?;
+
+    state
+        .note
+        .delete_block(session.user_id, note_id, block_id)
+        .await
+        .map_err(map_note_error)?;
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn patch_note_block_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((note_id, block_id)): Path<(String, String)>,
+    Json(payload): Json<BlockPatchBody>,
+) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+    let session_id = session_id_from_cookie(&headers)?;
+    let session = state
+        .auth
+        .authorize_session(session_id)
+        .await
+        .map_err(map_auth_error)?;
+    let note_id = Uuid::parse_str(&note_id).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid note id".to_owned(),
+                hint: None,
+            }),
+        )
+    })?;
+    let block_id = Uuid::parse_str(&block_id).map_err(|_| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "invalid block id".to_owned(),
+                hint: None,
+            }),
+        )
+    })?;
+
+    match payload {
+        BlockPatchBody::Move {
+            after_id,
+            before_id,
+        } => {
+            let after_uuid = match &after_id {
+                None => None,
+                Some(s) => Some(Uuid::parse_str(s).map_err(|_| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(ErrorResponse {
+                            error: "invalid after_id".to_owned(),
+                            hint: None,
+                        }),
+                    )
+                })?),
+            };
+            let before_uuid = match &before_id {
+                None => None,
+                Some(s) => Some(Uuid::parse_str(s).map_err(|_| {
+                    (
+                        StatusCode::BAD_REQUEST,
+                        Json(ErrorResponse {
+                            error: "invalid before_id".to_owned(),
+                            hint: None,
+                        }),
+                    )
+                })?),
+            };
+            state
+                .note
+                .move_block(
+                    session.user_id,
+                    note_id,
+                    block_id,
+                    after_uuid,
+                    before_uuid,
+                )
+                .await
+                .map_err(map_note_error)?;
+        }
+        BlockPatchBody::InsertText {
+            position,
+            text,
+            style,
+            loose,
+        } => {
+            state
+                .note
+                .apply_text_patch(
+                    session.user_id,
+                    note_id,
+                    block_id,
+                    TextPatch::InsertText {
+                        position,
+                        text,
+                        style: style_from_patch(style, loose),
+                    },
+                )
+                .await
+                .map_err(map_note_error)?;
+        }
+        BlockPatchBody::DeleteRange { start, end } => {
+            state
+                .note
+                .apply_text_patch(
+                    session.user_id,
+                    note_id,
+                    block_id,
+                    TextPatch::DeleteRange { start, end },
+                )
+                .await
+                .map_err(map_note_error)?;
+        }
+        BlockPatchBody::DeleteAt {
+            position,
+            direction,
+        } => {
+            state
+                .note
+                .apply_text_patch(
+                    session.user_id,
+                    note_id,
+                    block_id,
+                    TextPatch::DeleteAt {
+                        position,
+                        direction,
+                    },
+                )
+                .await
+                .map_err(map_note_error)?;
+        }
+        BlockPatchBody::EnableFormatting {
+            start,
+            end,
+            style,
+            loose,
+        } => {
+            state
+                .note
+                .apply_text_patch(
+                    session.user_id,
+                    note_id,
+                    block_id,
+                    TextPatch::EnableFormatting {
+                        start,
+                        end,
+                        style: style_from_patch(style, loose),
+                    },
+                )
+                .await
+                .map_err(map_note_error)?;
+        }
+        BlockPatchBody::DisableFormatting {
+            start,
+            end,
+            style,
+            loose,
+        } => {
+            state
+                .note
+                .apply_text_patch(
+                    session.user_id,
+                    note_id,
+                    block_id,
+                    TextPatch::DisableFormatting {
+                        start,
+                        end,
+                        style: style_from_patch(style, loose),
+                    },
+                )
+                .await
+                .map_err(map_note_error)?;
+        }
+    }
 
     Ok(StatusCode::NO_CONTENT)
 }

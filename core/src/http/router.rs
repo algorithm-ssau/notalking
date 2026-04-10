@@ -6,8 +6,9 @@ use axum::{
 
 use super::{
     handlers::{
-        close_other_sessions_handler, close_session_handler, create_note_handler, delete_note_handler,
-        health_handler, list_notes_handler, list_sessions_handler, login_handler, logout_handler,
+        close_other_sessions_handler, close_session_handler, create_note_block_handler, create_note_handler,
+        delete_note_block_handler, delete_note_handler, health_handler, list_note_blocks_handler,
+        list_notes_handler, list_sessions_handler, login_handler, logout_handler, patch_note_block_handler,
         register_handler,
     },
     logging::request_logging_middleware,
@@ -32,6 +33,14 @@ pub fn create_http_router(state: AppState) -> Router {
         .route("/notes", get(list_notes_handler))
         .route("/notes", post(create_note_handler))
         .route("/notes/{note_id}", delete(delete_note_handler))
+        .route(
+            "/notes/{note_id}/blocks",
+            get(list_note_blocks_handler).post(create_note_block_handler),
+        )
+        .route(
+            "/notes/{note_id}/blocks/{block_id}",
+            delete(delete_note_block_handler).patch(patch_note_block_handler),
+        )
         .nest("/auth", create_auth_router(state.clone()))
         .layer(middleware::from_fn(request_logging_middleware))
         .with_state(state)

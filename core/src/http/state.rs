@@ -12,7 +12,10 @@ use crate::{
 #[derive(Clone)]
 pub struct AppState {
     pub auth: AuthService<user::in_memory::InMemoryRepo, session::in_memory::InMemoryRepo, SimplePasswordService>,
-    pub note: note::service::NoteService<note::in_memory::InMemoryRepo>,
+    pub note: note::service::NoteService<
+        note::in_memory::InMemoryNoteStore,
+        note::in_memory::InMemoryNoteStore,
+    >,
     pub rate_limiter: InMemoryRateLimiter,
 }
 
@@ -20,12 +23,12 @@ impl AppState {
     pub fn new() -> Self {
         let user_repo = Arc::new(user::in_memory::InMemoryRepo::new());
         let session_repo = Arc::new(session::in_memory::InMemoryRepo::new());
-        let note_repo = Arc::new(note::in_memory::InMemoryRepo::new());
+        let note_store = Arc::new(note::in_memory::InMemoryNoteStore::new());
         let password_service = Arc::new(SimplePasswordService);
 
         Self {
             auth: AuthService::new(user_repo, session_repo, password_service),
-            note: note::service::NoteService::new(note_repo),
+            note: note::service::NoteService::new(note_store.clone(), note_store),
             rate_limiter: InMemoryRateLimiter::new(20, Duration::from_secs(60)),
         }
     }
