@@ -26,7 +26,10 @@ struct Inner {
 }
 
 impl EmbeddingRuntime {
-    pub async fn try_new(config: &CoreConfig, notes: Arc<SqlNoteStore>) -> Result<Option<Self>, String> {
+    pub async fn try_new(
+        config: &CoreConfig,
+        notes: Arc<SqlNoteStore>,
+    ) -> Result<Option<Self>, String> {
         let q_url = match &config.qdrant_url {
             Some(u) if !u.is_empty() => u.clone(),
             _ => return Ok(None),
@@ -36,10 +39,15 @@ impl EmbeddingRuntime {
             _ => return Ok(None),
         };
 
-        let store = QdrantVectorStore::new(&q_url, &config.qdrant_collection, config.embedding_vector_dimensions).await?;
+        let store = QdrantVectorStore::new(
+            &q_url,
+            &config.qdrant_collection,
+            config.embedding_vector_dimensions,
+        )
+        .await?;
         let api_key = std::env::var("OPENAI_API_KEY").ok();
         let provider = HttpEmbeddingProvider::new(
-            emb_base,
+            emb_base.clone(),
             config.embedding_model.clone(),
             api_key,
             config.embedding_query_prefix.clone(),
@@ -50,6 +58,15 @@ impl EmbeddingRuntime {
             EmbeddingRegenerationMode::AfterQuietPeriodSinceLastPatch { idle_ms } => idle_ms,
             EmbeddingRegenerationMode::OnEachBlockPatch => 0,
         };
+        tracing::info!(
+            qdrant_url = %q_url,
+            collection = %config.qdrant_collection,
+            provider_url = %emb_base,
+            model = %config.embedding_model,
+            vector_dim = config.embedding_vector_dimensions,
+            mode = ?config.embedding_regeneration,
+            "embedding runtime enabled"
+        );
 
         Ok(Some(Self {
             inner: Arc::new(Inner {
@@ -65,6 +82,7 @@ impl EmbeddingRuntime {
 
     pub fn notify_blocks_changed(&self, user_id: Uuid, note_id: Uuid) {
         let inner = self.inner.clone();
+        tracing::debug!(%user_id, %note_id, mode = ?inner.mode, "embedding reindex scheduled");
         match inner.mode {
             EmbeddingRegenerationMode::OnEachBlockPatch => {
                 tokio::spawn(async move {
@@ -106,6 +124,7 @@ impl EmbeddingRuntime {
 
 impl Inner {
     async fn reindex_note(&self, user_id: Uuid, note_id: Uuid) -> Result<(), String> {
+        tracing::debug!(%user_id, %note_id, "embedding reindex started");
         let raw = self
             .notes
             .load_document(note_id)
@@ -118,7 +137,9 @@ impl Inner {
         for block in loaded.blocks.values() {
             let plain = match &block.content {
                 Content::Text(tb) => tb.to_plain_text(),
-                Content::OrderedListItem(tb, _) | Content::UnorderedListItem(tb, _) => tb.to_plain_text(),
+                Content::OrderedListItem(tb, _) | Content::UnorderedListItem(tb, _) => {
+                    tb.to_plain_text()
+                }
                 Content::Image(_) | Content::Video(_) => continue,
             };
             if plain.trim().is_empty() {
@@ -131,6 +152,12 @@ impl Inner {
         for (_, text) in &block_texts {
             vectors.push(self.provider.embed_document(text).await?);
         }
+        tracing::debug!(
+            %note_id,
+            blocks = block_texts.len(),
+            vectors = vectors.len(),
+            "embedding vectors generated"
+        );
 
         self.store
             .reindex_note_blocks(user_id, note_id, &block_texts, &vectors)

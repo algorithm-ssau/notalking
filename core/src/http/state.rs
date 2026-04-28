@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    auth::{
-        password::ArgonPasswordService,
-        service::AuthService,
-    },
+    auth::{password::ArgonPasswordService, service::AuthService},
     config::CoreConfig,
     embedding::EmbeddingRuntime,
     http::rate_limit::RateLimiterHandle,
@@ -51,6 +48,8 @@ impl AppState {
     pub fn notify_embedding(&self, user_id: uuid::Uuid, note_id: uuid::Uuid) {
         if let Some(ref e) = self.embedding {
             e.notify_blocks_changed(user_id, note_id);
+        } else {
+            tracing::debug!(%user_id, %note_id, "embedding notification ignored because runtime is disabled");
         }
     }
 }

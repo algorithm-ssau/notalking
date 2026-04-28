@@ -58,6 +58,11 @@ impl HttpEmbeddingProvider {
 
     async fn embed_raw(&self, text: &str) -> Result<Vec<f32>, String> {
         let url = format!("{}/embeddings", self.base_url);
+        tracing::debug!(
+            model = %self.model,
+            input_chars = text.chars().count(),
+            "embedding request"
+        );
         let mut req = self.client.post(&url).json(&serde_json::json!({
             "model": self.model,
             "input": text,
@@ -72,11 +77,17 @@ impl HttpEmbeddingProvider {
             return Err(format!("embedding HTTP {}: {}", status, body));
         }
         let parsed: EmbedResponse = res.json().await.map_err(|e| e.to_string())?;
-        parsed
+        let embedding = parsed
             .data
             .into_iter()
             .next()
             .map(|d| d.embedding)
-            .ok_or_else(|| "empty embedding data".to_owned())
+            .ok_or_else(|| "empty embedding data".to_owned())?;
+        tracing::debug!(
+            model = %self.model,
+            dimensions = embedding.len(),
+            "embedding response"
+        );
+        Ok(embedding)
     }
 }
