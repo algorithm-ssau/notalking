@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package notalking.v1;
+
+// Core Intelligence bridge -- synchronous RPCs from Intelligence to Core (SPEC 5, 6).
+service CoreBridge {
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc GetNoteContext(GetNoteContextRequest) returns (GetNoteContextResponse);
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;
+}
+
+message GetNoteContextRequest {
+  string user_id = 1;
+  string note_id = 2;
+}
+
+message GetNoteContextResponse {
+  string title = 1;
+  string head_block_id = 2;
+}

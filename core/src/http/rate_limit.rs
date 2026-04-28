@@ -8,14 +8,51 @@ use std::{
 use axum::{
     Json,
     extract::{Request, State, connect_info::ConnectInfo},
-    http::StatusCode,
+    http::{HeaderValue, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
 };
 use serde::Serialize;
 use tokio::sync::Mutex;
 
+use crate::config::CoreConfig;
+
 use super::state::AppState;
+
+#[derive(Clone)]
+pub enum RateLimiterHandle {
+    Memory(InMemoryRateLimiter),
+    Redis(RedisRateLimiter),
+}
+
+impl RateLimiterHandle {
+    pub async fn new_async(config: &CoreConfig) -> Self {
+        if let Some(url) = config.redis_url.as_ref() {
+            match redis::Client::open(url.as_str()) {
+                Ok(client) => match redis::aio::ConnectionManager::new(client).await {
+                    Ok(manager) => {
+                        return Self::Redis(RedisRateLimiter {
+                            client: manager,
+                            max_requests: 60,
+                            window_secs: 60,
+                        });
+                    }
+                    Err(e) => tracing::warn!(error = %e, "redis connection failed for rate limiting"),
+                },
+                Err(e) => tracing::warn!(error = %e, "invalid redis URL for rate limiting"),
+            }
+            tracing::warn!("falling back to in-memory rate limiting");
+        }
+        Self::Memory(InMemoryRateLimiter::new(60, Duration::from_secs(60)))
+    }
+
+    pub async fn allow(&self, key: &str) -> bool {
+        match self {
+            RateLimiterHandle::Memory(m) => m.allow(key).await,
+            RateLimiterHandle::Redis(r) => r.allow(key).await,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct InMemoryRateLimiter {
@@ -55,12 +92,44 @@ impl InMemoryRateLimiter {
     }
 }
 
-#[derive(Serialize)]
-struct RateLimitErrorResponse {
-    error: String,
+#[derive(Clone)]
+pub struct RedisRateLimiter {
+    client: redis::aio::ConnectionManager,
+    max_requests: u32,
+    window_secs: u64,
 }
 
-pub async fn auth_rate_limit(
+impl RedisRateLimiter {
+    async fn allow(&self, key: &str) -> bool {
+        let mut conn = self.client.clone();
+        let k = format!("rl:core:{key}");
+        let n: i64 = match redis::cmd("INCR")
+            .arg(&k)
+            .query_async(&mut conn)
+            .await
+        {
+            Ok(n) => n,
+            Err(_) => return true,
+        };
+        if n == 1 {
+            let _: Result<(), _> = redis::cmd("EXPIRE")
+                .arg(&k)
+                .arg(self.window_secs as i64)
+                .query_async(&mut conn)
+                .await;
+        }
+        n <= self.max_requests as i64
+    }
+}
+
+#[derive(Serialize)]
+struct RateLimitErrorResponse {
+    code: &'static str,
+    message: String,
+    details: Option<serde_json::Value>,
+}
+
+pub async fn global_rate_limit(
     State(state): State<AppState>,
     request: Request,
     next: Next,
@@ -72,10 +141,48 @@ pub async fn auth_rate_limit(
         .unwrap_or_else(|| "unknown".to_owned());
 
     if !state.rate_limiter.allow(&key).await {
+        let retry = HeaderValue::from_static("60");
         return (
             StatusCode::TOO_MANY_REQUESTS,
+            [(
+                axum::http::header::RETRY_AFTER,
+                retry,
+            )],
             Json(RateLimitErrorResponse {
-                error: "too many requests, try again later".to_owned(),
+                code: "rate_limited",
+                message: "too many requests, try again later".to_owned(),
+                details: None,
+            }),
+        )
+            .into_response();
+    }
+
+    next.run(request).await
+}
+
+pub async fn auth_rate_limit(
+    State(state): State<AppState>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let key = request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|connect| format!("auth:{}", connect.0.ip()))
+        .unwrap_or_else(|| "auth:unknown".to_owned());
+
+    if !state.rate_limiter.allow(&key).await {
+        let retry = HeaderValue::from_static("60");
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(
+                axum::http::header::RETRY_AFTER,
+                retry,
+            )],
+            Json(RateLimitErrorResponse {
+                code: "rate_limited",
+                message: "too many requests, try again later".to_owned(),
+                details: None,
             }),
         )
             .into_response();

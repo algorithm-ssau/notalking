@@ -2,7 +2,7 @@
 
 @theme {
     --font-family-default: "Inter", system-ui, -apple-system, sans-serif;
-    --font-family-rounded: "Open Runde", system-ui, -apple-system, sans-serif;
+    --font-family-rounded: "Inter", system-ui, -apple-system, sans-serif;
 
     --font-default: var(--font-family-default);
     --font-rounded: var(--font-family-rounded);

@@ -50,13 +50,11 @@ where
         LoadedNoteBlocks::from_raw(raw)
     }
 
-    async fn save_blocks(&self, note_id: Uuid, doc: LoadedNoteBlocks) -> Result<(), NoteError> {
-        let raw = doc.into_raw()?;
-        self.blocks.save_document(note_id, &raw).await
-    }
-
-    async fn touch_note(&self, mut note: Note) -> Result<(), NoteError> {
+    async fn persist_loaded(&self, mut note: Note, loaded: LoadedNoteBlocks) -> Result<(), NoteError> {
+        note.head_id = loaded.head_id;
         note.updated_at = Utc::now();
+        let raw = loaded.into_raw()?;
+        self.blocks.save_document(note.id, &raw).await?;
         self.repo.update(note).await
     }
 }
@@ -72,18 +70,19 @@ where
         }
 
         let now = Utc::now();
+        let loaded = LoadedNoteBlocks::single_text_block(&input.initial_text, now);
+        let head_id = loaded.head_id;
         let note = Note {
             id: Uuid::new_v4(),
             user_id: input.user_id,
             title: input.title,
+            head_id,
             created_at: now,
             updated_at: now,
         };
 
         let created = self.repo.create(note).await?;
-        let loaded = LoadedNoteBlocks::single_text_block(&input.initial_text, now);
-        let raw = loaded.into_raw()?;
-        self.blocks.save_document(created.id, &raw).await?;
+        self.persist_loaded(created.clone(), loaded).await?;
         Ok(created)
     }
 
@@ -131,8 +130,7 @@ where
             .get(&id)
             .cloned()
             .ok_or(NoteError::Internal)?;
-        self.save_blocks(note_id, loaded).await?;
-        self.touch_note(note).await?;
+        self.persist_loaded(note, loaded).await?;
         Ok(created)
     }
 
@@ -146,8 +144,7 @@ where
         let now = Utc::now();
         let mut loaded = self.load_blocks(note_id).await?;
         loaded.delete_block(block_id, now)?;
-        self.save_blocks(note_id, loaded).await?;
-        self.touch_note(note).await?;
+        self.persist_loaded(note, loaded).await?;
         Ok(())
     }
 
@@ -167,8 +164,7 @@ where
             (_, Some(before)) => loaded.move_block_before(block_id, before, now)?,
             (after, None) => loaded.move_block_after(block_id, after, now)?,
         }
-        self.save_blocks(note_id, loaded).await?;
-        self.touch_note(note).await?;
+        self.persist_loaded(note, loaded).await?;
         Ok(())
     }
 
@@ -205,8 +201,7 @@ where
                 style,
             } => tb.disable_formatting(start, end, style),
         }
-        self.save_blocks(note_id, loaded).await?;
-        self.touch_note(note).await?;
+        self.persist_loaded(note, loaded).await?;
         Ok(())
     }
 }

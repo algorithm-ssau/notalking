@@ -1,32 +1,32 @@
 <template>
-    <div class="flex min-w-0 flex-1 items-start gap-1">
+    <div
+        class="group relative min-w-0 flex-1 rounded-[8px] px-[8px] py-[4px] transition-colors hover:bg-[#151619]"
+        :class="isDragging ? 'bg-[#151619]' : 'bg-transparent'"
+        :data-block-id="block.id"
+    >
         <button
             type="button"
-            class="mt-0.5 flex h-6 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-fg-muted opacity-0 transition-opacity hover:bg-bg-overlay hover:text-fg-secondary active:cursor-grabbing group-hover:opacity-100"
+            class="absolute -left-6 top-[4px] flex h-6 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-fg-muted opacity-0 transition-opacity hover:bg-bg-overlay hover:text-fg-secondary active:cursor-grabbing group-hover:opacity-100"
             draggable="true"
-            aria-label="Переместить блок"
+            aria-label="Move block"
             @dragstart="onHandleDragStart"
             @click.prevent
         >
             <span class="text-xs leading-none tracking-tighter">⋮⋮</span>
         </button>
         <div
-            class="min-w-0 flex-1 rounded-md px-2 py-1 transition-colors"
-            :class="isDragging ? 'bg-bg-overlay/50' : 'hover:bg-bg-overlay/40'"
-        >
-            <div
-                ref="editableRef"
-                class="editor-text whitespace-pre-wrap break-words text-fg-primary outline-none"
-                contenteditable="true"
-                spellcheck="false"
-                @input="onEditorInput"
-                @blur="onBlur"
-                @compositionstart="isComposing = true"
-                @compositionend="onCompositionEnd"
-                @mouseup="reportSelection"
-                @keyup="reportSelection"
-            />
-        </div>
+            ref="editableRef"
+            class="editor-text min-h-[24px] whitespace-pre-wrap wrap-break-words text-[14px] leading-[24px] text-fg-primary outline-none"
+            contenteditable="true"
+            spellcheck="false"
+            @click="onEditorClick"
+            @input="onEditorInput"
+            @blur="onBlur"
+            @compositionstart="isComposing = true"
+            @compositionend="onCompositionEnd"
+            @mouseup="reportSelection"
+            @keyup="reportSelection"
+        />
     </div>
 </template>
 
@@ -90,7 +90,9 @@ function collectTextFromEditor(root: HTMLElement): string {
 }
 
 function plainFromBlock(): string {
-    return normalizePlain(plainFromChunks(getTextContent(props.block.content)?.chunks ?? []));
+    return normalizePlain(
+        plainFromChunks(getTextContent(props.block.content)?.chunks ?? []),
+    );
 }
 
 function escapeHtml(text: string) {
@@ -128,7 +130,10 @@ function syncDomFromChunks() {
     }
     el.innerHTML = chunks
         .map((c) => {
-            const cls = [c.style.bold ? "font-semibold" : "", c.style.italic ? "italic" : ""]
+            const cls = [
+                c.style.bold ? "font-semibold" : "",
+                c.style.italic ? "italic" : "",
+            ]
                 .filter(Boolean)
                 .join(" ");
             const cs = chunkStyleAttr(c.style);
@@ -176,7 +181,12 @@ function getCaretScalarOffset(): number {
         return 0;
     }
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || !sel.focusNode || !el.contains(sel.focusNode)) {
+    if (
+        !sel ||
+        sel.rangeCount === 0 ||
+        !sel.focusNode ||
+        !el.contains(sel.focusNode)
+    ) {
         return scalarLen(normalizePlain(collectTextFromEditor(el)));
     }
     const r = document.createRange();
@@ -263,7 +273,10 @@ function pickStylePayload(style: TextStyle): Record<string, string | boolean> {
     return out;
 }
 
-function stylePayloadAtScalarOffset(chunks: TextChunk[], offset: number): Record<string, string | boolean> {
+function stylePayloadAtScalarOffset(
+    chunks: TextChunk[],
+    offset: number,
+): Record<string, string | boolean> {
     if (chunks.length === 0) {
         return {};
     }
@@ -438,6 +451,29 @@ function onHandleDragStart(ev: DragEvent) {
         ev.dataTransfer.effectAllowed = "move";
     }
     emit("drag-start", props.block.id);
+}
+
+function onWrapperClick(ev: MouseEvent) {
+    const root = editableRef.value;
+    if (!root) {
+        return;
+    }
+    root.focus();
+    
+    // Try to position cursor where the click was
+    const range = document.caretRangeFromPoint(ev.clientX, ev.clientY);
+    if (range && root.contains(range.startContainer)) {
+        const sel = window.getSelection();
+        if (sel) {
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+    }
+}
+
+function onEditorClick(ev: MouseEvent) {
+    // Only prevent default for wrapper clicks, allow normal selection in editor
+    ev.stopPropagation();
 }
 </script>
 

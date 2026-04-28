@@ -15,23 +15,11 @@ use crate::{
 use super::RegisterInput;
 
 #[derive(Clone)]
-pub struct SimplePasswordService;
-
-impl PasswordService for SimplePasswordService {
-    fn hash_password(&self, plain: &str) -> Result<String, AuthError> {
-        Ok(plain.to_owned())
-    }
-
-    fn verify_password(&self, plain: &str, hash: &str) -> Result<bool, AuthError> {
-        Ok(plain == hash)
-    }
-}
-
-#[derive(Clone)]
 pub struct AuthService<U, S, P> {
     user_repo: Arc<U>,
     session_repo: Arc<S>,
     password_service: Arc<P>,
+    /// Sliding window length (SPEC: seven days from last activity).
     session_ttl_hours: i64,
 }
 
@@ -41,7 +29,7 @@ impl<U, S, P> AuthService<U, S, P> {
             user_repo,
             session_repo,
             password_service,
-            session_ttl_hours: 24,
+            session_ttl_hours: 7 * 24,
         }
     }
 
@@ -74,6 +62,15 @@ impl<U, S, P> AuthService<U, S, P> {
             .ok_or(AuthError::SessionNotFound)?;
         Self::ensure_active_session(&session)?;
         Ok(session)
+    }
+
+    fn to_session_view(session: &Session) -> SessionView {
+        SessionView {
+            session_id: session.id,
+            user_id: session.user_id,
+            issued_at: session.issued_at,
+            expires_at: session.expires_at,
+        }
     }
 }
 
@@ -112,15 +109,15 @@ where
         let expires_at = now + Duration::hours(self.session_ttl_hours);
         let session = self
             .session_repo
-            .create_session(user.id, expires_at)
+            .create_session(
+                user.id,
+                expires_at,
+                &input.device,
+                &input.location,
+            )
             .await?;
 
-        Ok(SessionView {
-            session_id: session.id,
-            user_id: user.id,
-            issued_at: session.issued_at,
-            expires_at: session.expires_at,
-        })
+        Ok(Self::to_session_view(&session))
     }
 
     async fn login(&self, input: super::LoginInput) -> Result<SessionView, AuthError> {
@@ -146,15 +143,15 @@ where
         let expires_at = now + Duration::hours(self.session_ttl_hours);
         let session = self
             .session_repo
-            .create_session(user.id, expires_at)
+            .create_session(
+                user.id,
+                expires_at,
+                &input.device,
+                &input.location,
+            )
             .await?;
 
-        Ok(SessionView {
-            session_id: session.id,
-            user_id: user.id,
-            issued_at: session.issued_at,
-            expires_at: session.expires_at,
-        })
+        Ok(Self::to_session_view(&session))
     }
 
     async fn logout(&self, input: LogoutInput) -> Result<(), AuthError> {
@@ -191,8 +188,11 @@ where
             .into_iter()
             .map(|session| ManagedSessionView {
                 session_id: session.id,
+                device: session.device,
+                location: session.location,
                 issued_at: session.issued_at,
                 expires_at: session.expires_at,
+                updated_at: session.updated_at,
                 revoked_at: session.revoked_at,
                 is_current: session.id == current_session.id,
             })
@@ -225,11 +225,27 @@ where
             .await
     }
 
-    async fn authorize_session(&self, session_id: Uuid) -> Result<AuthorizedSession, AuthError> {
-        let current_session = self.resolve_current_session(session_id).await?;
-        Ok(AuthorizedSession {
-            session_id: current_session.id,
-            user_id: current_session.user_id,
-        })
+    async fn authorize_session(&self, session_id: Uuid) -> Result<(AuthorizedSession, SessionView), AuthError> {
+        let session = self.resolve_current_session(session_id).await?;
+        let now = Utc::now();
+        let new_expires = now + Duration::hours(self.session_ttl_hours);
+        self.session_repo
+            .extend_session(session.id, new_expires, now)
+            .await?;
+
+        let view = SessionView {
+            session_id: session.id,
+            user_id: session.user_id,
+            issued_at: session.issued_at,
+            expires_at: new_expires,
+        };
+
+        Ok((
+            AuthorizedSession {
+                session_id: session.id,
+                user_id: session.user_id,
+            },
+            view,
+        ))
     }
 }

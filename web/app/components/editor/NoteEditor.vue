@@ -1,5 +1,4 @@
 <template>
-    <p>NOTE EDITOR</p>
     <div class="note-editor text-fg-primary">
         <header class="mb-6 flex flex-wrap items-center justify-between gap-3">
             <h2 class="font-rounded text-lg text-fg-primary">
@@ -10,7 +9,7 @@
                 class="rounded-md bg-bg-overlay px-3 py-1.5 text-[14px] leading-6 text-fg-secondary hover:bg-bg-float hover:text-fg-primary"
                 @click="addTextBlock"
             >
-                Добавить текстовый блок
+                Add text block
             </button>
         </header>
 
@@ -28,72 +27,77 @@
         </p>
 
         <div
-            class="rounded-lg border border-bg-overlay bg-bg-raised p-2 sm:p-3"
+            class="p-[12px] flex justify-center"
             @dragend="onDragEnd"
         >
             <p
                 v-if="textBlocks.length === 0"
                 class="px-2 py-6 text-center text-[14px] leading-6 text-fg-muted"
             >
-                Нет блоков. Добавьте первый.
+                No blocks yet. Add one to start.
             </p>
 
-            <div v-else class="flex flex-col">
+            <div v-else class="flex flex-col w-full max-w-[512px]">
                 <template v-for="(block, index) in textBlocks" :key="block.id">
                     <div
-                        class="relative min-h-2 rounded transition-colors"
-                        :class="
-                            dragActive && dropSlot === index
-                                ? 'bg-blue/25 ring-1 ring-blue/40'
-                                : 'bg-transparent'
-                        "
+                        class="relative h-[4px] w-full transition-all duration-300 ease-out"
                         @dragover.prevent="onDragOverSlot(index)"
                         @dragleave="onDragLeaveSlot(index)"
                         @drop.prevent="onDrop(index)"
                     >
+                        <div class="absolute -inset-y-3 inset-x-0 z-10" />
                         <div
-                            class="absolute inset-x-2 top-1/2 h-0.5 -translate-y-1/2 rounded bg-blue/60 opacity-0 transition-opacity"
+                            class="absolute inset-x-[8px] top-[1px] h-[2px] rounded-full transition-colors"
                             :class="
                                 dragActive && dropSlot === index
-                                    ? 'opacity-100'
-                                    : ''
+                                    ? 'bg-blue/40'
+                                    : 'bg-transparent'
                             "
                         />
                     </div>
 
                     <div
-                        class="group rounded-md p-1.5 transition-colors sm:p-2"
+                        class="group flex gap-1 transition-all duration-300 ease-out"
                         :class="draggingId === block.id ? 'opacity-60' : ''"
                     >
-                        <EditorTextBlock
-                            :note-id="noteId"
-                            :block="block"
-                            :is-dragging="draggingId === block.id"
-                            @blocks-updated="onBlocksUpdated"
-                            @format-select="onFormatSelect(block.id, $event)"
-                            @format-clear="onFormatClear"
-                            @drag-start="onDragStart"
-                        />
+                        <div
+                            class="min-w-0 flex-1 cursor-text"
+                            @click.self="onBlockClick(block.id)"
+                        >
+                            <EditorTextBlock
+                                :note-id="noteId"
+                                :block="block"
+                                :is-dragging="draggingId === block.id"
+                                @blocks-updated="onBlocksUpdated"
+                                @format-select="onFormatSelect(block.id, $event)"
+                                @format-clear="onFormatClear"
+                                @drag-start="onDragStart"
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            class="mt-1 h-8 shrink-0 self-start rounded-md px-2 text-[12px] leading-6 text-fg-muted opacity-0 transition-opacity hover:bg-red/20 hover:text-red group-hover:opacity-100"
+                            aria-label="Delete block"
+                            @click="removeBlock(block.id)"
+                        >
+                            Delete
+                        </button>
                     </div>
                 </template>
 
                 <div
-                    class="relative min-h-2 rounded transition-colors"
-                    :class="
-                        dragActive && dropSlot === textBlocks.length
-                            ? 'bg-blue/25 ring-1 ring-blue/40'
-                            : 'bg-transparent'
-                    "
+                    class="relative h-[4px] w-full transition-all duration-300 ease-out"
                     @dragover.prevent="onDragOverSlot(textBlocks.length)"
                     @dragleave="onDragLeaveSlot(textBlocks.length)"
                     @drop.prevent="onDrop(textBlocks.length)"
                 >
+                    <div class="absolute -inset-y-3 inset-x-0 z-10" />
                     <div
-                        class="absolute inset-x-2 top-1/2 h-0.5 -translate-y-1/2 rounded bg-blue/60 opacity-0 transition-opacity"
+                        class="absolute inset-x-[8px] top-[1px] h-[2px] rounded-full transition-colors"
                         :class="
                             dragActive && dropSlot === textBlocks.length
-                                ? 'opacity-100'
-                                : ''
+                                ? 'bg-blue/40'
+                                : 'bg-transparent'
                         "
                     />
                 </div>
@@ -114,10 +118,19 @@
 <script setup lang="ts">
 import type { NoteBlock } from "~/types/editor";
 import { getTextContent, scalarLen } from "~/types/editor";
+import { getCoreErrorMessage } from "~/utils/coreErrors";
 
-const props = defineProps<{
-    noteId: string;
-    noteTitle: string;
+const props = withDefaults(
+    defineProps<{
+        noteId: string;
+        noteTitle: string;
+        focusBlockId?: string | null;
+    }>(),
+    { focusBlockId: null },
+);
+
+const emit = defineEmits<{
+    "focus-block-done": [];
 }>();
 
 const api = useCoreApi();
@@ -156,32 +169,23 @@ onMounted(() => {
     }
 });
 
-function formatFetchError(e: unknown): string {
-    const err = e as {
-        data?: { error?: string; message?: string };
-        message?: string;
-        statusCode?: number;
-        cause?: { message?: string };
-    };
-    const msg =
-        err?.data?.error ??
-        err?.data?.message ??
-        err?.message ??
-        err?.cause?.message;
-    if (msg) {
-        if (/fetch failed|ECONNREFUSED|connect/i.test(msg)) {
-            return "Не удаётся связаться с Core API (порт 40000). Запустите core и проверьте прокси /core.";
+watch(
+    [() => props.focusBlockId, blocks],
+    async () => {
+        const id = props.focusBlockId;
+        if (!id || import.meta.server) {
+            return;
         }
-        return msg;
-    }
-    if (err?.statusCode === 401) {
-        return "Сессия истекла или не авторизованы. Войдите снова.";
-    }
-    if (err?.statusCode === 502 || err?.statusCode === 503) {
-        return "Core API недоступен. Запустите сервис (порт 40000) и проверьте прокси /core.";
-    }
-    return "Не удалось загрузить блоки заметки.";
-}
+        if (!blocks.value.some((b) => b.id === id)) {
+            return;
+        }
+        await nextTick();
+        const el = document.querySelector(`[data-block-id="${id}"]`);
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        emit("focus-block-done");
+    },
+    { flush: "post" },
+);
 
 async function loadBlocks() {
     if (import.meta.server) {
@@ -192,9 +196,12 @@ async function loadBlocks() {
         const res = await api.listBlocks(props.noteId);
         const list = Array.isArray(res?.blocks) ? res.blocks : [];
         blocks.value = list as NoteBlock[];
-    } catch (e) {
+    } catch (e: unknown) {
         blocks.value = [];
-        loadError.value = formatFetchError(e);
+        loadError.value = getCoreErrorMessage(
+            e,
+            "Could not load note blocks.",
+        );
     }
 }
 
@@ -209,8 +216,27 @@ async function addTextBlock() {
     try {
         await api.createTextBlock(props.noteId, afterId, "");
         await loadBlocks();
-    } catch (e) {
-        blockActionError.value = formatFetchError(e);
+    } catch (e: unknown) {
+        blockActionError.value = getCoreErrorMessage(
+            e,
+            "Could not add block.",
+        );
+    }
+}
+
+async function removeBlock(blockId: string) {
+    if (!confirm("Delete this block?")) {
+        return;
+    }
+    blockActionError.value = "";
+    try {
+        await api.deleteBlock(props.noteId, blockId);
+        await loadBlocks();
+    } catch (e: unknown) {
+        blockActionError.value = getCoreErrorMessage(
+            e,
+            "Could not delete block.",
+        );
     }
 }
 
@@ -254,8 +280,9 @@ async function onDrop(slotIndex: number) {
                 before_id: list[0].id,
             });
         } else {
-            const afterId = list[slotIndex - 1].id;
-            if (afterId === dragged) {
+            const prev = list[slotIndex - 1];
+            const afterId = prev?.id;
+            if (!afterId || afterId === dragged) {
                 onDragEnd();
                 return;
             }
@@ -320,6 +347,14 @@ function onFormatSelect(
 
 function onFormatClear() {
     formatting.value = null;
+}
+
+function onBlockClick(blockId: string) {
+    // Focus the EditorTextBlock - it will handle focusing the text
+    const blockElement = document.querySelector(`[data-block-id="${blockId}"]`);
+    if (blockElement instanceof HTMLElement) {
+        blockElement.click();
+    }
 }
 
 function blockById(id: string) {

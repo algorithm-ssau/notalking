@@ -85,12 +85,61 @@
                     </button>
                     <button
                         type="button"
+                        class="rounded-md bg-red/20 px-3 py-1.5 text-[14px] leading-6 text-red hover:bg-red/30"
+                        :disabled="!resolvedNoteId"
+                        @click="confirmDeleteNote"
+                    >
+                        Delete note
+                    </button>
+                    <button
+                        type="button"
+                        title="Search (Ctrl or ⌘+K)"
+                        class="rounded-md bg-bg-overlay px-3 py-1.5 text-[14px] leading-6 text-fg-secondary hover:bg-bg-float hover:text-fg-primary"
+                        @click="searchOpen = true"
+                    >
+                        Search
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-md bg-bg-overlay px-3 py-1.5 text-[14px] leading-6 text-fg-secondary hover:bg-bg-float hover:text-fg-primary"
+                        @click="sessionsOpen = true"
+                    >
+                        Sessions
+                    </button>
+                    <button
+                        type="button"
                         class="rounded-md px-3 py-1.5 text-[14px] leading-6 text-fg-muted hover:text-fg-secondary"
                         @click="logout"
                     >
                         Log out
                     </button>
                 </div>
+
+                <div
+                    v-if="notesTotalPages > 1"
+                    class="mb-4 flex flex-wrap items-center gap-2 text-[14px] text-fg-secondary"
+                >
+                    <button
+                        type="button"
+                        class="rounded-md bg-bg-overlay px-2 py-1 hover:bg-bg-float disabled:opacity-40"
+                        :disabled="notesPage <= 1"
+                        @click="goPage(notesPage - 1)"
+                    >
+                        Previous
+                    </button>
+                    <span>
+                        Page {{ notesPage }} of {{ notesTotalPages }} ({{ notesTotal }} notes)
+                    </span>
+                    <button
+                        type="button"
+                        class="rounded-md bg-bg-overlay px-2 py-1 hover:bg-bg-float disabled:opacity-40"
+                        :disabled="notesPage >= notesTotalPages"
+                        @click="goPage(notesPage + 1)"
+                    >
+                        Next
+                    </button>
+                </div>
+
                 <p v-if="loadError" class="mb-4 text-[14px] leading-6 text-red">
                     {{ loadError }}
                 </p>
@@ -99,28 +148,52 @@
                     :key="resolvedNoteId"
                     :note-id="resolvedNoteId"
                     :note-title="resolvedNoteTitle"
+                    :focus-block-id="focusBlockId"
+                    @focus-block-done="focusBlockId = null"
                 />
             </section>
         </div>
+
+        <SessionsPanel :open="sessionsOpen" @close="sessionsOpen = false" />
+        <SemanticSearchDialog
+            :open="searchOpen"
+            :note-titles="noteTitleMap"
+            @close="searchOpen = false"
+            @navigate="onSearchNavigate"
+        />
     </div>
 </template>
 
 <script setup lang="ts">
-import type { NoteSummary } from "~/types/editor";
+import type { NoteResponse } from "~/types/core";
+import { getCoreErrorMessage } from "~/utils/coreErrors";
 
 const api = useCoreApi();
+const sessionStore = useSessionStore();
+
 const sessionOk = ref(false);
 const authError = ref("");
 const loadError = ref("");
 const login = ref("demo");
 const password = ref("demo");
-const notes = ref<NoteSummary[]>([]);
+const notes = ref<NoteResponse[]>([]);
+const notesPage = ref(1);
+const notesPerPage = ref(20);
+const notesTotalPages = ref(0);
+const notesTotal = ref(0);
 const selectedNoteId = ref("");
+const sessionsOpen = ref(false);
+const searchOpen = ref(false);
+const focusBlockId = ref<string | null>(null);
 
-/**
- * Keeps the open note in sync with the list: if nothing is selected or the id is stale,
- * the getter falls back to the first note so the editor always mounts when notes exist.
- */
+const noteTitleMap = computed(() => {
+    const m = new Map<string, string>();
+    for (const n of notes.value) {
+        m.set(n.id, n.title);
+    }
+    return m;
+});
+
 const resolvedNoteId = computed({
     get(): string {
         const id = selectedNoteId.value;
@@ -138,16 +211,37 @@ const resolvedNoteTitle = computed(
     () => notes.value.find((n) => n.id === resolvedNoteId.value)?.title ?? "",
 );
 
-async function refreshNotes() {
+function onSearchNavigate(payload: { noteId: string; blockId: string }) {
+    selectedNoteId.value = payload.noteId;
+    focusBlockId.value = payload.blockId;
+}
+
+function onSearchHotkey(ev: KeyboardEvent) {
+    if ((ev.metaKey || ev.ctrlKey) && ev.key === "k") {
+        ev.preventDefault();
+        searchOpen.value = true;
+    }
+}
+
+async function refreshNotes(page?: number) {
     loadError.value = "";
+    const p = page ?? notesPage.value;
     try {
-        const { notes: list } = await api.listNotes();
-        notes.value = list;
+        const res = await api.listNotes({
+            page: p,
+            per_page: notesPerPage.value,
+        });
+        notes.value = res.notes;
+        notesPage.value = res.page;
+        notesTotalPages.value = res.total_pages;
+        notesTotal.value = res.total;
+
+        const list = res.notes;
         if (list.length) {
             const current = selectedNoteId.value;
             const stillValid = current && list.some((n) => n.id === current);
             if (!stillValid) {
-                selectedNoteId.value = list[0].id;
+                selectedNoteId.value = list[0]?.id ?? "";
             }
         } else {
             selectedNoteId.value = "";
@@ -155,20 +249,26 @@ async function refreshNotes() {
         sessionOk.value = true;
     } catch (e: unknown) {
         sessionOk.value = false;
-        const err = e as { data?: { error?: string }; message?: string };
-        loadError.value =
-            err?.data?.error ?? err?.message ?? "Could not load notes";
+        loadError.value = getCoreErrorMessage(e, "Could not load notes");
     }
+}
+
+async function goPage(p: number) {
+    if (p < 1 || (notesTotalPages.value > 0 && p > notesTotalPages.value)) {
+        return;
+    }
+    notesPage.value = p;
+    await refreshNotes(p);
 }
 
 async function doLogin() {
     authError.value = "";
     try {
         await api.login(login.value, password.value);
-        await refreshNotes();
+        notesPage.value = 1;
+        await refreshNotes(1);
     } catch (e: unknown) {
-        const err = e as { data?: { error?: string } };
-        authError.value = err?.data?.error ?? "Login failed";
+        authError.value = getCoreErrorMessage(e, "Login failed");
     }
 }
 
@@ -176,10 +276,10 @@ async function doRegister() {
     authError.value = "";
     try {
         await api.register(login.value, password.value);
-        await refreshNotes();
+        notesPage.value = 1;
+        await refreshNotes(1);
     } catch (e: unknown) {
-        const err = e as { data?: { error?: string } };
-        authError.value = err?.data?.error ?? "Registration failed";
+        authError.value = getCoreErrorMessage(e, "Registration failed");
     }
 }
 
@@ -190,31 +290,58 @@ async function createNote() {
             `Note ${new Date().toLocaleString()}`,
             "",
         );
-        await refreshNotes();
+        notesPage.value = 1;
+        await refreshNotes(1);
         selectedNoteId.value = note.id;
     } catch (e: unknown) {
-        const err = e as { data?: { error?: string } };
-        loadError.value = err?.data?.error ?? "Could not create note";
+        loadError.value = getCoreErrorMessage(e, "Could not create note");
+    }
+}
+
+function confirmDeleteNote() {
+    const id = resolvedNoteId.value;
+    if (!id) {
+        return;
+    }
+    if (!confirm("Delete this note? This cannot be undone.")) {
+        return;
+    }
+    void deleteNoteById(id);
+}
+
+async function deleteNoteById(noteId: string) {
+    loadError.value = "";
+    try {
+        await api.deleteNote(noteId);
+        if (selectedNoteId.value === noteId) {
+            selectedNoteId.value = "";
+        }
+        await refreshNotes(notesPage.value);
+    } catch (e: unknown) {
+        loadError.value = getCoreErrorMessage(e, "Could not delete note");
     }
 }
 
 async function logout() {
     try {
-        await $fetch("/core/auth/logout", {
-            method: "POST",
-            credentials: "include",
-        });
+        await api.logout();
     } catch {
         /* ignore */
     }
     sessionOk.value = false;
     notes.value = [];
     selectedNoteId.value = "";
+    sessionStore.clear();
 }
 
 onMounted(() => {
+    window.addEventListener("keydown", onSearchHotkey);
     refreshNotes().catch(() => {
         sessionOk.value = false;
     });
+});
+
+onUnmounted(() => {
+    window.removeEventListener("keydown", onSearchHotkey);
 });
 </script>

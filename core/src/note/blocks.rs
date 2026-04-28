@@ -354,7 +354,10 @@ impl LoadedNoteBlocks {
         let block = self.blocks.get_mut(&block_id).ok_or(NoteError::BlockNotFound)?;
         block.updated_at = now;
         match &mut block.content {
-            Content::Text(tb) => Ok(tb),
+            Content::Text(tb) | Content::OrderedListItem(tb, _) | Content::UnorderedListItem(tb, _) => {
+                Ok(tb)
+            }
+            Content::Image(_) | Content::Video(_) => Err(NoteError::InvalidOperation),
         }
     }
 }
