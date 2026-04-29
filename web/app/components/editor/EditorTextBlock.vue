@@ -1,25 +1,32 @@
 <template>
     <div
-        class="group relative min-w-0 flex-1 rounded-[8px] px-[8px] py-[4px] transition-colors hover:bg-[#151619]"
-        :class="isDragging ? 'bg-[#151619]' : 'bg-transparent'"
+        :class="[
+            'editor-block group',
+            {
+                'is-dragging': isDragging,
+                'is-active': isFocused,
+                'is-empty': plainFromBlock().length === 0,
+            },
+        ]"
         :data-block-id="block.id"
     >
         <button
             type="button"
-            class="absolute -left-6 top-[4px] flex h-6 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-fg-muted opacity-0 transition-opacity hover:bg-bg-overlay hover:text-fg-secondary active:cursor-grabbing group-hover:opacity-100"
+            class="drag-handle"
             draggable="true"
             aria-label="Move block"
             @dragstart="onHandleDragStart"
             @click.prevent
         >
-            <span class="text-xs leading-none tracking-tighter">⋮⋮</span>
+            <span>⋮⋮</span>
         </button>
         <div
             ref="editableRef"
-            class="editor-text min-h-[24px] whitespace-pre-wrap wrap-break-words text-[14px] leading-[24px] text-fg-primary outline-none"
+            class="editor-text"
             contenteditable="true"
             spellcheck="false"
             @click="onEditorClick"
+            @focus="isFocused = true"
             @input="onEditorInput"
             @blur="onBlur"
             @compositionstart="isComposing = true"
@@ -52,6 +59,7 @@ const emit = defineEmits<{
 const api = useCoreApi();
 const editableRef = ref<HTMLElement | null>(null);
 const isComposing = ref(false);
+const isFocused = ref(false);
 const dirty = ref(false);
 const lastSyncedPlain = ref("");
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -125,7 +133,7 @@ function syncDomFromChunks() {
     const tc = getTextContent(props.block.content);
     const chunks = tc?.chunks ?? [];
     if (chunks.length === 0 || (chunks.length === 1 && chunks[0].text === "")) {
-        el.innerHTML = '<span class="text-fg-muted">&#x200b;</span>';
+        el.innerHTML = '<span style="color:var(--text-disabled)">&#x200b;</span>';
         return;
     }
     el.innerHTML = chunks
@@ -412,6 +420,7 @@ function onEditorInput() {
 }
 
 function onBlur() {
+    isFocused.value = false;
     emit("format-clear");
     if (debounceTimer != null) {
         clearTimeout(debounceTimer);
@@ -453,33 +462,88 @@ function onHandleDragStart(ev: DragEvent) {
     emit("drag-start", props.block.id);
 }
 
-function onWrapperClick(ev: MouseEvent) {
-    const root = editableRef.value;
-    if (!root) {
-        return;
-    }
-    root.focus();
-    
-    // Try to position cursor where the click was
-    const range = document.caretRangeFromPoint(ev.clientX, ev.clientY);
-    if (range && root.contains(range.startContainer)) {
-        const sel = window.getSelection();
-        if (sel) {
-            sel.removeAllRanges();
-            sel.addRange(range);
-        }
-    }
-}
-
 function onEditorClick(ev: MouseEvent) {
-    // Only prevent default for wrapper clicks, allow normal selection in editor
     ev.stopPropagation();
 }
 </script>
 
 <style scoped>
+.editor-block {
+    position: relative;
+    min-width: 0;
+    flex: 1;
+    border-left: 2px solid transparent;
+    border-radius: var(--r-item);
+    padding: 4px 8px 4px 10px;
+    transition:
+        background-color 150ms ease,
+        border-color 150ms ease,
+        opacity 150ms ease;
+}
+
+.editor-block:hover,
+.editor-block.is-dragging {
+    background: var(--bg-1);
+}
+
+.editor-block.is-active {
+    border-left-color: color-mix(in srgb, var(--accent-primary) 50%, transparent);
+}
+
+.drag-handle {
+    position: absolute;
+    top: 4px;
+    left: -24px;
+    display: flex;
+    width: 24px;
+    height: 24px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: grab;
+    opacity: 0;
+    transition:
+        background-color 150ms ease,
+        color 150ms ease,
+        opacity 150ms ease;
+}
+
+.drag-handle:hover {
+    background: var(--bg-3);
+    color: var(--text-secondary);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.editor-block:hover .drag-handle,
+.editor-block.is-active .drag-handle {
+    opacity: 1;
+}
+
+.drag-handle span {
+    font-size: 12px;
+    letter-spacing: -0.12em;
+    line-height: 1;
+}
+
 .editor-text {
-    font-size: 14px;
+    min-height: 24px;
+    color: var(--text-primary);
+    font-size: 16px;
     line-height: 24px;
+    outline: none;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.editor-block.is-empty .editor-text::before {
+    content: "Start writing...";
+    color: var(--text-disabled);
+    pointer-events: none;
 }
 </style>

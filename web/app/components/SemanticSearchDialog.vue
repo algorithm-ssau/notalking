@@ -2,119 +2,143 @@
     <Teleport to="body">
         <div
             v-if="open"
-            class="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-[12vh] transition-opacity sm:pt-[15vh]"
+            class="modal-backdrop search-backdrop"
             role="dialog"
             aria-modal="true"
             aria-labelledby="search-title"
+            @keydown.down.prevent="moveSelection(1)"
+            @keydown.up.prevent="moveSelection(-1)"
+            @keydown.enter.prevent="pickSelected"
             @keydown.escape.prevent="emit('close')"
         >
-            <div
-                class="absolute inset-0"
-                aria-hidden="true"
-                @click="emit('close')"
-            />
-            <div
-                class="relative w-full max-w-lg rounded-lg border border-bg-overlay bg-bg-raised shadow-lg"
-                @click.stop
-            >
-                <header
-                    class="flex items-center justify-between border-b border-bg-overlay px-4 py-3"
-                >
-                    <h2 id="search-title" class="font-rounded text-lg text-fg-primary">
-                        Semantic search
-                    </h2>
-                    <button
-                        type="button"
-                        class="rounded-md px-2 py-1 text-[14px] leading-6 text-fg-muted hover:bg-bg-overlay hover:text-fg-secondary"
-                        @click="emit('close')"
-                    >
-                        Close
+            <div class="search-scrim" aria-hidden="true" @click="emit('close')" />
+            <section class="modal-surface search-modal" @click.stop>
+                <h2 id="search-title" class="sr-only">Search notes and blocks</h2>
+                <div class="search-input-wrap">
+                    <UiAppIcon name="search" :size="20" />
+                    <input
+                        id="semantic-query"
+                        v-model="query"
+                        type="search"
+                        autocomplete="off"
+                        placeholder="Search notes and blocks..."
+                        aria-label="Search notes and blocks"
+                    />
+                    <button class="icon-btn" type="button" aria-label="Close search" @click="emit('close')">
+                        <UiAppIcon name="close" :size="17" />
                     </button>
-                </header>
-
-                <form class="border-b border-bg-overlay p-4" @submit.prevent="runSearch">
-                    <label class="sr-only" for="semantic-query">Search query</label>
-                    <div class="flex gap-2">
-                        <input
-                            id="semantic-query"
-                            v-model="query"
-                            type="search"
-                            autocomplete="off"
-                            placeholder="Search your notes…"
-                            class="min-w-0 flex-1 rounded-md border border-bg-overlay bg-bg-elevated px-3 py-2 text-[14px] leading-6 text-fg-primary outline-none focus:ring-1 focus:ring-blue"
-                        />
-                        <button
-                            type="submit"
-                            class="shrink-0 rounded-md bg-blue px-4 py-2 text-[14px] font-medium text-white hover:opacity-90 disabled:opacity-50"
-                            :disabled="searching || !query.trim()"
-                        >
-                            Search
-                        </button>
-                    </div>
-                </form>
-
-                <div class="max-h-[50vh] overflow-y-auto p-4">
-                    <p
-                        v-if="searchError"
-                        class="mb-3 rounded-md border border-red/40 bg-red/10 px-3 py-2 text-[14px] leading-6 text-red"
-                    >
-                        {{ searchError }}
-                    </p>
-                    <p
-                        v-if="embeddingsHint"
-                        class="mb-3 text-[14px] leading-6 text-fg-secondary"
-                    >
-                        {{ embeddingsHint }}
-                    </p>
-                    <p
-                        v-if="searching"
-                        class="text-[14px] text-fg-muted"
-                    >
-                        Searching…
-                    </p>
-                    <ul v-else-if="hits.length" class="flex flex-col gap-2">
-                        <li v-for="(h, i) in hits" :key="`${h.note_id}-${h.block_id}-${i}`">
-                            <button
-                                type="button"
-                                class="w-full rounded-md border border-bg-overlay bg-bg-base px-3 py-2 text-left text-[14px] leading-6 transition-colors hover:border-blue/40 hover:bg-bg-elevated"
-                                @click="pick(h)"
-                            >
-                                <span class="font-medium text-fg-primary">{{
-                                    titleForNote(h.note_id)
-                                }}</span>
-                                <span class="ml-2 text-fg-muted">
-                                    score {{ h.score.toFixed(3) }}
-                                </span>
-                                <span class="mt-1 block truncate font-mono text-[12px] text-fg-tertiary">
-                                    {{ h.note_id }} / {{ h.block_id }}
-                                </span>
-                            </button>
-                        </li>
-                    </ul>
-                    <p
-                        v-else-if="searched && !searchError"
-                        class="text-[14px] text-fg-muted"
-                    >
-                        No results.
-                    </p>
                 </div>
-            </div>
+
+                <div class="search-results">
+                    <p v-if="searchError" class="error-chip">{{ searchError }}</p>
+                    <p v-if="embeddingsHint" class="hint-chip">{{ embeddingsHint }}</p>
+
+                    <template v-if="!trimmedQuery">
+                        <p class="group-label">Recent</p>
+                        <button
+                            v-for="row in recentRows"
+                            :key="row.key"
+                            type="button"
+                            :class="['result-row', { 'is-active': isSelected(row) }]"
+                            @mouseenter="selectRow(row)"
+                            @click="pick(row)"
+                        >
+                            <UiAppIcon name="note" :size="16" />
+                            <span class="result-main">
+                                <strong>{{ row.primary }}</strong>
+                                <small>{{ row.secondary }}</small>
+                            </span>
+                            <time>{{ row.meta }}</time>
+                        </button>
+                        <p v-if="!recentRows.length" class="empty-state">No recent notes yet.</p>
+                    </template>
+
+                    <template v-else>
+                        <template v-if="titleRows.length">
+                            <p class="group-label">Notes</p>
+                            <button
+                                v-for="row in titleRows"
+                                :key="row.key"
+                                type="button"
+                                :class="['result-row', { 'is-active': isSelected(row) }]"
+                                @mouseenter="selectRow(row)"
+                                @click="pick(row)"
+                            >
+                                <UiAppIcon name="note" :size="16" />
+                                <span class="result-main">
+                                    <strong>
+                                        <template v-for="(part, i) in highlight(row.primary)" :key="`${row.key}-${i}`">
+                                            <mark v-if="part.match">{{ part.text }}</mark>
+                                            <span v-else>{{ part.text }}</span>
+                                        </template>
+                                    </strong>
+                                    <small>{{ row.secondary }}</small>
+                                </span>
+                                <time>{{ row.meta }}</time>
+                            </button>
+                        </template>
+
+                        <template v-if="blockRows.length">
+                            <p class="group-label">Blocks</p>
+                            <button
+                                v-for="row in blockRows"
+                                :key="row.key"
+                                type="button"
+                                :class="['result-row', { 'is-active': isSelected(row) }]"
+                                @mouseenter="selectRow(row)"
+                                @click="pick(row)"
+                            >
+                                <UiAppIcon name="block" :size="16" />
+                                <span class="result-main">
+                                    <strong>{{ row.primary }}</strong>
+                                    <small>
+                                        <template v-for="(part, i) in highlight(row.secondary)" :key="`${row.key}-s-${i}`">
+                                            <mark v-if="part.match">{{ part.text }}</mark>
+                                            <span v-else>{{ part.text }}</span>
+                                        </template>
+                                    </small>
+                                </span>
+                                <time>{{ row.meta }}</time>
+                            </button>
+                        </template>
+
+                        <p v-if="searching" class="loading-line">
+                            <span />
+                            <span />
+                            <span />
+                        </p>
+                        <p v-else-if="showNoResults" class="empty-state">
+                            No results for <code>{{ trimmedQuery }}</code>. Try different terms.
+                        </p>
+                    </template>
+                </div>
+            </section>
         </div>
     </Teleport>
 </template>
 
 <script setup lang="ts">
-import type { SemanticHitResponse } from "~/types/core";
+import type { NoteResponse, SemanticHitResponse } from "~/types/core";
 import { getCoreErrorMessage, isEmbeddingsDisabledError } from "~/utils/coreErrors";
+
+type SearchRow = {
+    key: string;
+    kind: "note" | "block";
+    noteId: string;
+    blockId: string | null;
+    primary: string;
+    secondary: string;
+    meta: string;
+};
 
 const props = defineProps<{
     open: boolean;
-    noteTitles: Map<string, string> | Record<string, string>;
+    notes: NoteResponse[];
 }>();
 
 const emit = defineEmits<{
     close: [];
-    navigate: [payload: { noteId: string; blockId: string }];
+    navigate: [payload: { noteId: string; blockId: string | null }];
 }>();
 
 const api = useCoreApi();
@@ -124,58 +148,401 @@ const searching = ref(false);
 const searched = ref(false);
 const searchError = ref("");
 const embeddingsHint = ref("");
+const selectedIndex = ref(0);
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+let searchSeq = 0;
+
+const trimmedQuery = computed(() => query.value.trim());
+
+const sortedNotes = computed(() =>
+    [...props.notes].sort(
+        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
+    ),
+);
+
+const recentRows = computed<SearchRow[]>(() =>
+    sortedNotes.value.slice(0, 5).map((note) => ({
+        key: `recent-${note.id}`,
+        kind: "note",
+        noteId: note.id,
+        blockId: null,
+        primary: note.title || "Untitled note",
+        secondary: "Recently updated note",
+        meta: relativeTime(note.updated_at),
+    })),
+);
+
+const titleRows = computed<SearchRow[]>(() => {
+    const q = trimmedQuery.value.toLowerCase();
+    if (!q) {
+        return [];
+    }
+    return sortedNotes.value
+        .filter((note) => (note.title || "Untitled note").toLowerCase().includes(q))
+        .slice(0, 6)
+        .map((note) => ({
+            key: `note-${note.id}`,
+            kind: "note",
+            noteId: note.id,
+            blockId: null,
+            primary: note.title || "Untitled note",
+            secondary: "Title match",
+            meta: relativeTime(note.updated_at),
+        }));
+});
+
+const noteTitleMap = computed(() => {
+    const map = new Map<string, string>();
+    for (const note of props.notes) {
+        map.set(note.id, note.title || "Untitled note");
+    }
+    return map;
+});
+
+const blockRows = computed<SearchRow[]>(() =>
+    hits.value.map((hit, index) => ({
+        key: `block-${hit.note_id}-${hit.block_id}-${index}`,
+        kind: "block",
+        noteId: hit.note_id,
+        blockId: hit.block_id,
+        primary: "Semantic block match",
+        secondary: noteTitleMap.value.get(hit.note_id) ?? "Untitled note",
+        meta: `score ${hit.score.toFixed(3)}`,
+    })),
+);
+
+const selectableRows = computed(() =>
+    trimmedQuery.value ? [...titleRows.value, ...blockRows.value] : recentRows.value,
+);
+
+const showNoResults = computed(
+    () =>
+        Boolean(trimmedQuery.value) &&
+        searched.value &&
+        !searching.value &&
+        titleRows.value.length === 0 &&
+        blockRows.value.length === 0 &&
+        !searchError.value,
+);
 
 watch(
     () => props.open,
-    (v) => {
-        if (v) {
-            searchError.value = "";
-            embeddingsHint.value = "";
-            hits.value = [];
-            searched.value = false;
-            nextTick(() => {
-                document.getElementById("semantic-query")?.focus();
-            });
+    (value) => {
+        if (value) {
+            resetState();
+            nextTick(() => document.getElementById("semantic-query")?.focus());
         }
     },
 );
 
-function titleForNote(noteId: string): string {
-    const m = props.noteTitles;
-    if (m instanceof Map) {
-        return m.get(noteId) ?? "Untitled note";
-    }
-    return m[noteId] ?? "Untitled note";
-}
-
-async function runSearch() {
-    const q = query.value.trim();
-    if (!q) {
-        return;
-    }
-    searching.value = true;
-    searched.value = true;
+watch(trimmedQuery, (value) => {
+    selectedIndex.value = 0;
     searchError.value = "";
     embeddingsHint.value = "";
+    if (searchTimer) {
+        clearTimeout(searchTimer);
+        searchTimer = null;
+    }
+    if (!value) {
+        hits.value = [];
+        searched.value = false;
+        searching.value = false;
+        return;
+    }
+    searchTimer = setTimeout(() => {
+        void runSemantic(value);
+    }, 260);
+});
+
+onUnmounted(() => {
+    if (searchTimer) {
+        clearTimeout(searchTimer);
+    }
+});
+
+function resetState() {
+    query.value = "";
     hits.value = [];
+    selectedIndex.value = 0;
+    searched.value = false;
+    searching.value = false;
+    searchError.value = "";
+    embeddingsHint.value = "";
+}
+
+async function runSemantic(value: string) {
+    const seq = ++searchSeq;
+    searching.value = true;
+    searched.value = true;
     try {
-        const res = await api.semanticSearch({ query: q, limit: 20 });
-        hits.value = res.hits ?? [];
+        const res = await api.semanticSearch({ query: value, limit: 12 });
+        if (seq === searchSeq) {
+            hits.value = res.hits ?? [];
+        }
     } catch (e: unknown) {
+        if (seq !== searchSeq) {
+            return;
+        }
+        hits.value = [];
         if (isEmbeddingsDisabledError(e)) {
             embeddingsHint.value =
-                "Semantic search is not configured on this Core instance (embeddings disabled).";
-            hits.value = [];
+                "Semantic search is not configured on this Core instance. Title matches still work.";
         } else {
             searchError.value = getCoreErrorMessage(e, "Search failed");
         }
     } finally {
-        searching.value = false;
+        if (seq === searchSeq) {
+            searching.value = false;
+        }
     }
 }
 
-function pick(hit: SemanticHitResponse) {
-    emit("navigate", { noteId: hit.note_id, blockId: hit.block_id });
+function isSelected(row: SearchRow): boolean {
+    return selectableRows.value[selectedIndex.value]?.key === row.key;
+}
+
+function selectRow(row: SearchRow) {
+    const index = selectableRows.value.findIndex((candidate) => candidate.key === row.key);
+    if (index >= 0) {
+        selectedIndex.value = index;
+    }
+}
+
+function moveSelection(delta: number) {
+    const rows = selectableRows.value;
+    if (!rows.length) {
+        return;
+    }
+    selectedIndex.value = (selectedIndex.value + delta + rows.length) % rows.length;
+}
+
+function pickSelected() {
+    const row = selectableRows.value[selectedIndex.value];
+    if (row) {
+        pick(row);
+    }
+}
+
+function pick(row: SearchRow) {
+    emit("navigate", { noteId: row.noteId, blockId: row.blockId });
     emit("close");
 }
+
+function relativeTime(iso: string): string {
+    const ms = Date.now() - new Date(iso).getTime();
+    if (!Number.isFinite(ms)) {
+        return "recent";
+    }
+    const minutes = Math.max(0, Math.round(ms / 60000));
+    if (minutes < 1) return "now";
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 24) return `${hours}h`;
+    const days = Math.round(hours / 24);
+    return `${days}d`;
+}
+
+function highlight(text: string): Array<{ text: string; match: boolean }> {
+    const q = trimmedQuery.value;
+    if (!q) {
+        return [{ text, match: false }];
+    }
+    const lower = text.toLowerCase();
+    const needle = q.toLowerCase();
+    const index = lower.indexOf(needle);
+    if (index < 0) {
+        return [{ text, match: false }];
+    }
+    return [
+        { text: text.slice(0, index), match: false },
+        { text: text.slice(index, index + q.length), match: true },
+        { text: text.slice(index + q.length), match: false },
+    ].filter((part) => part.text.length > 0);
+}
 </script>
+
+<style scoped>
+.search-backdrop {
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20vh 16px 16px;
+}
+
+.search-scrim {
+    position: absolute;
+    inset: 0;
+}
+
+.search-modal {
+    position: relative;
+    width: min(560px, 100%);
+    min-height: 64px;
+    max-height: 480px;
+    overflow: hidden;
+}
+
+.search-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--bg-3);
+    background: var(--bg-2);
+    padding: 8px;
+    color: var(--text-muted);
+}
+
+.search-input-wrap input {
+    min-width: 0;
+    flex: 1;
+    height: 48px;
+    border: 0;
+    border-radius: var(--r-input);
+    background: var(--bg-3);
+    color: var(--text-primary);
+    outline: none;
+    padding: 0 12px;
+}
+
+.search-input-wrap input::placeholder {
+    color: var(--text-disabled);
+}
+
+.search-results {
+    max-height: 408px;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.group-label {
+    margin: 10px 10px 6px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.result-row {
+    display: grid;
+    width: 100%;
+    min-height: 44px;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    border: 0;
+    border-radius: var(--r-item);
+    background: transparent;
+    color: var(--text-muted);
+    padding: 7px 10px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.result-row:hover,
+.result-row.is-active {
+    background: var(--bg-3);
+    color: var(--text-primary);
+}
+
+.result-main {
+    min-width: 0;
+}
+
+.result-main strong,
+.result-main small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.result-main strong {
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.result-main small,
+.result-row time {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+mark {
+    background: transparent;
+    color: var(--accent-gold);
+}
+
+.hint-chip {
+    border-radius: var(--r-input);
+    background: var(--bg-3);
+    color: var(--text-muted);
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 22px;
+}
+
+.empty-state {
+    margin: 24px 8px;
+    color: var(--text-muted);
+    text-align: center;
+    font-size: 14px;
+}
+
+.empty-state code {
+    color: var(--text-secondary);
+}
+
+.loading-line {
+    display: flex;
+    justify-content: center;
+    gap: 5px;
+    padding: 24px;
+}
+
+.loading-line span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    animation: dot 900ms ease-in-out infinite;
+}
+
+.loading-line span:nth-child(2) {
+    animation-delay: 120ms;
+}
+
+.loading-line span:nth-child(3) {
+    animation-delay: 240ms;
+}
+
+@keyframes dot {
+    0%,
+    100% {
+        opacity: 0.25;
+        transform: translateY(0);
+    }
+
+    50% {
+        opacity: 1;
+        transform: translateY(-3px);
+    }
+}
+
+@media (max-width: 768px) {
+    .search-backdrop {
+        align-items: stretch;
+        padding: 0;
+    }
+
+    .search-modal {
+        width: 100%;
+        max-height: none;
+        border-radius: 0;
+    }
+
+    .search-results {
+        max-height: calc(100vh - 65px);
+    }
+}
+</style>

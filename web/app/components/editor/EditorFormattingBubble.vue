@@ -2,25 +2,15 @@
     <Teleport to="body">
         <div
             v-if="visible && rect"
-            class="pointer-events-auto fixed z-50 flex items-center gap-0.5 rounded-lg border border-bg-overlay bg-bg-elevated p-1 shadow-lg"
+            class="format-bubble"
             :style="bubbleStyle"
             @mousedown.prevent
         >
-            <button
-                type="button"
-                class="rounded px-2 py-1 text-[13px] font-semibold text-fg-primary hover:bg-bg-overlay"
-                :class="boldOn ? 'bg-bg-overlay' : ''"
-                @click="$emit('bold')"
-            >
+            <button type="button" :class="{ 'is-active': boldOn }" @click="$emit('bold')">
                 B
             </button>
-            <button
-                type="button"
-                class="rounded px-2 py-1 text-[13px] italic text-fg-primary hover:bg-bg-overlay"
-                :class="italicOn ? 'bg-bg-overlay' : ''"
-                @click="$emit('italic')"
-            >
-                I
+            <button type="button" :class="{ 'is-active': italicOn }" @click="$emit('italic')">
+                <em>I</em>
             </button>
         </div>
     </Teleport>
@@ -44,7 +34,7 @@ const bubbleStyle = computed(() => {
         return {};
     }
     const pad = 8;
-    const top = props.rect.top - pad - 36;
+    const top = props.rect.top - pad - 40;
     const left = props.rect.left + props.rect.width / 2;
     return {
         top: `${Math.max(8, top)}px`,
@@ -53,3 +43,37 @@ const bubbleStyle = computed(() => {
     };
 });
 </script>
+
+<style scoped>
+.format-bubble {
+    position: fixed;
+    z-index: 80;
+    display: flex;
+    gap: 4px;
+    border: 1px solid var(--bg-3);
+    border-radius: var(--r-card);
+    background: var(--bg-2);
+    padding: 4px;
+    box-shadow: 0 16px 44px rgb(0 0 0 / 0.45);
+}
+
+.format-bubble button {
+    display: grid;
+    width: 32px;
+    height: 28px;
+    place-items: center;
+    border: 0;
+    border-radius: var(--r-item);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.format-bubble button:hover,
+.format-bubble button.is-active {
+    background: var(--bg-3);
+    color: var(--text-primary);
+}
+</style>

@@ -1,69 +1,43 @@
 <template>
-    <div class="note-editor text-fg-primary">
-        <header class="mb-6 flex flex-wrap items-center justify-between gap-3">
-            <h2 class="font-rounded text-lg text-fg-primary">
-                {{ noteTitle }}
-            </h2>
-            <button
-                type="button"
-                class="rounded-md bg-bg-overlay px-3 py-1.5 text-[14px] leading-6 text-fg-secondary hover:bg-bg-float hover:text-fg-primary"
-                @click="addTextBlock"
-            >
-                Add text block
+    <article class="note-editor">
+        <header class="editor-titlebar">
+            <div>
+                <p class="editor-kicker">Current note</p>
+                <h1 class="editor-title">{{ noteTitle || "Untitled note" }}</h1>
+            </div>
+            <button class="btn btn-ghost add-block" type="button" @click="addTextBlock">
+                <UiAppIcon name="plus" :size="16" />
+                Add block
             </button>
         </header>
 
-        <p
-            v-if="loadError"
-            class="mb-4 rounded-md border border-red/40 bg-red/10 px-3 py-2 text-[14px] leading-6 text-red"
-        >
-            {{ loadError }}
-        </p>
-        <p
-            v-if="blockActionError"
-            class="mb-4 rounded-md border border-red/40 bg-red/10 px-3 py-2 text-[14px] leading-6 text-red"
-        >
-            {{ blockActionError }}
-        </p>
+        <div class="editor-messages">
+            <p v-if="loadError" class="error-chip">{{ loadError }}</p>
+            <p v-if="blockActionError" class="error-chip">{{ blockActionError }}</p>
+        </div>
 
-        <div
-            class="p-[12px] flex justify-center"
-            @dragend="onDragEnd"
-        >
-            <p
-                v-if="textBlocks.length === 0"
-                class="px-2 py-6 text-center text-[14px] leading-6 text-fg-muted"
-            >
-                No blocks yet. Add one to start.
-            </p>
+        <div class="block-canvas" @dragend="onDragEnd">
+            <div v-if="textBlocks.length === 0" class="empty-editor">
+                <p>Start writing...</p>
+                <button class="btn btn-ghost" type="button" @click="addTextBlock">
+                    Create first block
+                </button>
+            </div>
 
-            <div v-else class="flex flex-col w-full max-w-[512px]">
+            <div v-else class="block-list">
                 <template v-for="(block, index) in textBlocks" :key="block.id">
                     <div
-                        class="relative h-[4px] w-full transition-all duration-300 ease-out"
+                        class="drop-slot"
                         @dragover.prevent="onDragOverSlot(index)"
                         @dragleave="onDragLeaveSlot(index)"
                         @drop.prevent="onDrop(index)"
                     >
-                        <div class="absolute -inset-y-3 inset-x-0 z-10" />
-                        <div
-                            class="absolute inset-x-[8px] top-[1px] h-[2px] rounded-full transition-colors"
-                            :class="
-                                dragActive && dropSlot === index
-                                    ? 'bg-blue/40'
-                                    : 'bg-transparent'
-                            "
-                        />
+                        <div class="drop-hitbox" />
+                        <div :class="['drop-line', { 'is-active': dragActive && dropSlot === index }]" />
                     </div>
 
-                    <div
-                        class="group flex gap-1 transition-all duration-300 ease-out"
-                        :class="draggingId === block.id ? 'opacity-60' : ''"
-                    >
-                        <div
-                            class="min-w-0 flex-1 cursor-text"
-                            @click.self="onBlockClick(block.id)"
-                        >
+                    <div :class="['block-row', { 'is-dragging': draggingId === block.id }]">
+                        <div class="block-shell" @click.self="onBlockClick(block.id)">
                             <EditorTextBlock
                                 :note-id="noteId"
                                 :block="block"
@@ -76,30 +50,23 @@
                         </div>
                         <button
                             type="button"
-                            class="mt-1 h-8 shrink-0 self-start rounded-md px-2 text-[12px] leading-6 text-fg-muted opacity-0 transition-opacity hover:bg-red/20 hover:text-red group-hover:opacity-100"
+                            class="icon-btn delete-block"
                             aria-label="Delete block"
                             @click="removeBlock(block.id)"
                         >
-                            Delete
+                            <UiAppIcon name="trash" :size="15" />
                         </button>
                     </div>
                 </template>
 
                 <div
-                    class="relative h-[4px] w-full transition-all duration-300 ease-out"
+                    class="drop-slot"
                     @dragover.prevent="onDragOverSlot(textBlocks.length)"
                     @dragleave="onDragLeaveSlot(textBlocks.length)"
                     @drop.prevent="onDrop(textBlocks.length)"
                 >
-                    <div class="absolute -inset-y-3 inset-x-0 z-10" />
-                    <div
-                        class="absolute inset-x-[8px] top-[1px] h-[2px] rounded-full transition-colors"
-                        :class="
-                            dragActive && dropSlot === textBlocks.length
-                                ? 'bg-blue/40'
-                                : 'bg-transparent'
-                        "
-                    />
+                    <div class="drop-hitbox" />
+                    <div :class="['drop-line', { 'is-active': dragActive && dropSlot === textBlocks.length }]" />
                 </div>
             </div>
         </div>
@@ -112,7 +79,7 @@
             @bold="applyFormatBold"
             @italic="applyFormatItalic"
         />
-    </div>
+    </article>
 </template>
 
 <script setup lang="ts">
@@ -350,10 +317,10 @@ function onFormatClear() {
 }
 
 function onBlockClick(blockId: string) {
-    // Focus the EditorTextBlock - it will handle focusing the text
     const blockElement = document.querySelector(`[data-block-id="${blockId}"]`);
-    if (blockElement instanceof HTMLElement) {
-        blockElement.click();
+    const editable = blockElement?.querySelector('[contenteditable="true"]');
+    if (editable instanceof HTMLElement) {
+        editable.focus();
     }
 }
 
@@ -419,3 +386,157 @@ async function applyFormatItalic() {
     formatting.value = null;
 }
 </script>
+
+<style scoped>
+.note-editor {
+    min-height: 100%;
+    color: var(--text-primary);
+}
+
+.editor-titlebar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 48px 32px 20px;
+}
+
+.editor-kicker {
+    margin: 0 0 8px;
+    color: var(--text-disabled);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 24px;
+    text-transform: uppercase;
+}
+
+.editor-title {
+    margin: 0;
+    color: var(--text-primary);
+    font-family: var(--font-heading);
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 36px;
+}
+
+.add-block {
+    min-height: 36px;
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.editor-messages {
+    display: grid;
+    gap: 8px;
+    max-width: 760px;
+    padding: 0 32px;
+}
+
+.block-canvas {
+    padding: 0 32px 48px;
+}
+
+.block-list {
+    display: flex;
+    flex-direction: column;
+    width: min(760px, 100%);
+}
+
+.empty-editor {
+    display: grid;
+    width: min(760px, 100%);
+    min-height: 260px;
+    place-content: start;
+    padding-top: 8px;
+}
+
+.empty-editor p {
+    margin: 0 0 16px;
+    color: var(--text-disabled);
+    font-size: 16px;
+    line-height: 24px;
+}
+
+.empty-editor .btn {
+    justify-self: start;
+    min-height: 36px;
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.drop-slot {
+    position: relative;
+    height: 6px;
+    width: 100%;
+}
+
+.drop-hitbox {
+    position: absolute;
+    inset: -12px 0;
+    z-index: 1;
+}
+
+.drop-line {
+    position: absolute;
+    inset: 2px 8px auto;
+    height: 2px;
+    border-radius: var(--r-pill);
+    background: transparent;
+    transition: background-color 150ms ease;
+}
+
+.drop-line.is-active {
+    background: color-mix(in srgb, var(--accent-primary) 55%, transparent);
+}
+
+.block-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 32px;
+    gap: 4px;
+    align-items: start;
+    transition:
+        opacity 150ms ease,
+        transform 150ms ease;
+}
+
+.block-row.is-dragging {
+    opacity: 0.6;
+    transform: scale(0.995);
+}
+
+.block-shell {
+    min-width: 0;
+    cursor: text;
+}
+
+.delete-block {
+    margin-top: 4px;
+    color: var(--text-disabled);
+    opacity: 0;
+}
+
+.block-row:hover .delete-block {
+    opacity: 1;
+}
+
+.delete-block:hover {
+    color: var(--danger);
+}
+
+@media (max-width: 768px) {
+    .editor-titlebar {
+        padding: 32px 20px 16px;
+    }
+
+    .block-canvas,
+    .editor-messages {
+        padding-inline: 20px;
+    }
+
+    .editor-titlebar {
+        flex-direction: column;
+    }
+}
+</style>

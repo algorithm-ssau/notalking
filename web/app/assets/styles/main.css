@@ -1,29 +1,412 @@
 @import "./tailwind.css";
 
+@font-face {
+    font-family: "Open Runde";
+    src: url("../fonts/OpenRunde-Regular.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Open Runde";
+    src: url("../fonts/OpenRunde-Medium.woff2") format("woff2");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Open Runde";
+    src: url("../fonts/OpenRunde-Semibold.woff2") format("woff2");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Open Runde";
+    src: url("../fonts/OpenRunde-Bold.woff2") format("woff2");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
-    --color-bg-base: #09090b;
-    --color-bg-raised: #151619;
-    --color-bg-elevated: #1e2024;
-    --color-bg-overlay: #272a30;
-    --color-bg-float: #30343b;
+    --bg-base: #09090b;
+    --bg-1: #151619;
+    --bg-2: #1e2024;
+    --bg-3: #272a30;
+    --bg-4: #30343b;
 
-    --color-fg-primary: #f4f5f6;
-    --color-fg-secondary: #c7ccd1;
-    --color-fg-tertiary: #9aa3ac;
-    --color-fg-muted: #6e7a86;
-    --color-fg-subtle: #4a525a;
+    --text-primary: #f4f5f6;
+    --text-secondary: #c7ccd1;
+    --text-tertiary: #9aa3ac;
+    --text-muted: #6e7a86;
+    --text-disabled: #4a525a;
 
-    --color-green: #27ae60;
-    --color-red: #e74c3c;
-    --color-yellow: #f1c40f;
-    --color-blue: #0f66f5;
+    --accent-primary: #0f66f5;
+    --accent-gold: #c9a96e;
+    --success: #27ae60;
+    --danger: #e74c3c;
+    --warning: #f1c40f;
 
-    --duration-fast: 120ms;
-    --duration-slow: 240ms;
+    --r-pill: 100px;
+    --r-card: 20px;
+    --r-input: 12px;
+    --r-item: 10px;
+
+    --font-body: "Inter", system-ui, -apple-system, sans-serif;
+    --font-heading: "Open Runde", system-ui, -apple-system, sans-serif;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+    /* Backward-compatible aliases for existing Tailwind utility names. */
+    --color-bg-base: var(--bg-base);
+    --color-bg-raised: var(--bg-1);
+    --color-bg-elevated: var(--bg-2);
+    --color-bg-overlay: var(--bg-3);
+    --color-bg-float: var(--bg-4);
+    --color-fg-primary: var(--text-primary);
+    --color-fg-secondary: var(--text-secondary);
+    --color-fg-tertiary: var(--text-tertiary);
+    --color-fg-muted: var(--text-muted);
+    --color-fg-subtle: var(--text-disabled);
+    --color-green: var(--success);
+    --color-red: var(--danger);
+    --color-yellow: var(--warning);
+    --color-blue: var(--accent-primary);
+    --duration-fast: 150ms;
+    --duration-slow: 250ms;
+}
+
+[data-surface="marketing"] {
+    --bg-base: #000;
+    --bg-1: #0a0a0a;
+    --bg-2: #111;
+    --bg-3: #181818;
+    --bg-4: #1a1a1a;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    background: var(--bg-base);
+    color-scheme: dark;
 }
 
 body {
-    background-color: var(--color-bg-base);
-    color: var(--color-fg-primary);
-    font-family: var(--font-family-default);
+    min-width: 320px;
+    margin: 0;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 24px;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
+}
+
+button {
+    color: inherit;
+}
+
+::selection {
+    background: color-mix(in srgb, var(--accent-primary) 25%, transparent);
+}
+
+.font-rounded,
+.font-heading {
+    font-family: var(--font-heading);
+}
+
+.surface-card {
+    border: 1px solid var(--bg-3);
+    border-radius: var(--r-card);
+    background: var(--bg-2);
+    box-shadow: 0 24px 80px rgb(0 0 0 / 0.35);
+}
+
+.btn {
+    display: inline-flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 0;
+    border-radius: 24px;
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 24px;
+    text-decoration: none;
+    transition:
+        background-color 150ms ease,
+        border-color 150ms ease,
+        color 150ms ease,
+        opacity 150ms ease,
+        transform 150ms ease;
+    cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+}
+
+.btn:focus-visible,
+.input:focus-visible,
+.icon-btn:focus-visible,
+.list-row:focus-visible {
+    outline: 2px solid var(--accent-primary);
+    outline-offset: 2px;
+}
+
+.btn:disabled,
+.input:disabled,
+textarea:disabled,
+select:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+}
+
+.btn-primary {
+    background: var(--accent-primary);
+    color: #fff;
+}
+
+[data-surface="marketing"] .btn-primary,
+.btn-primary-marketing {
+    background: var(--text-primary);
+    color: #000;
+}
+
+.btn-secondary {
+    border: 1px solid var(--bg-4);
+    background: transparent;
+    color: var(--text-tertiary);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--bg-3);
+    color: var(--text-primary);
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: #fff;
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text-muted);
+}
+
+.btn-ghost:hover:not(:disabled) {
+    background: var(--bg-3);
+    color: var(--text-secondary);
+}
+
+.icon-btn {
+    display: inline-flex;
+    height: 32px;
+    width: 32px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: var(--r-pill);
+    background: transparent;
+    color: var(--text-muted);
+    transition:
+        background-color 150ms ease,
+        color 150ms ease,
+        transform 150ms ease;
+    cursor: pointer;
+}
+
+.icon-btn:hover:not(:disabled) {
+    background: var(--bg-3);
+    color: var(--text-primary);
+}
+
+.input,
+.textarea {
+    width: 100%;
+    border: 1px solid var(--bg-3);
+    border-radius: var(--r-input);
+    background: var(--bg-4);
+    color: var(--text-primary);
+    outline: none;
+    transition:
+        border-color 150ms ease,
+        background-color 150ms ease,
+        box-shadow 150ms ease;
+}
+
+.input {
+    height: 48px;
+    padding: 0 12px;
+}
+
+.textarea {
+    min-height: 48px;
+    padding: 12px;
+    resize: none;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+    color: var(--text-disabled);
+}
+
+.input:focus,
+.textarea:focus {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-primary) 25%, transparent);
+}
+
+.form-label {
+    display: grid;
+    gap: 8px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 24px;
+}
+
+.list-row {
+    display: flex;
+    min-height: 40px;
+    align-items: center;
+    gap: 8px;
+    border: 0;
+    border-radius: var(--r-item);
+    padding: 6px 10px;
+    background: transparent;
+    color: var(--text-muted);
+    text-align: left;
+    text-decoration: none;
+    transition:
+        background-color 150ms ease,
+        color 150ms ease;
+    cursor: pointer;
+}
+
+.list-row:hover,
+.list-row.is-active {
+    background: var(--bg-3);
+    color: var(--text-primary);
+}
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: flex;
+    background: rgb(0 0 0 / 0.65);
+    backdrop-filter: blur(4px);
+}
+
+.modal-surface {
+    border: 1px solid var(--bg-3);
+    border-radius: var(--r-card);
+    background: var(--bg-2);
+    box-shadow: 0 24px 80px rgb(0 0 0 / 0.8);
+    animation: modal-enter 250ms var(--ease-out) both;
+}
+
+.logo-mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-primary);
+    font-family: var(--font-heading);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    text-decoration: none;
+}
+
+.logo-mark::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent-gold);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent-gold) 60%, transparent);
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--success) 70%, transparent);
+}
+
+.status-dot.is-offline {
+    background: var(--text-disabled);
+    box-shadow: none;
+}
+
+.error-chip {
+    border-left: 3px solid var(--danger);
+    border-radius: var(--r-input);
+    background: var(--bg-3);
+    color: var(--text-secondary);
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 24px;
+}
+
+@keyframes modal-enter {
+    from {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes shake {
+    10%,
+    90% {
+        transform: translateX(-1px);
+    }
+
+    20%,
+    80% {
+        transform: translateX(2px);
+    }
+
+    30%,
+    50%,
+    70% {
+        transform: translateX(-4px);
+    }
+
+    40%,
+    60% {
+        transform: translateX(4px);
+    }
+}
+
+@keyframes fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(18px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }

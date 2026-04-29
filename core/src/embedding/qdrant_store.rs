@@ -152,9 +152,14 @@ impl QdrantVectorStore {
         );
         let result = self
             .client
-            .search_points(SearchPointsBuilder::new(&self.collection, vector, limit).filter(filter))
+            .search_points(
+                SearchPointsBuilder::new(&self.collection, vector, limit)
+                    .filter(filter)
+                    .with_payload(true),
+            )
             .await
             .map_err(|e| e.to_string())?;
+        let raw_hits = result.result.len();
         let mut out = Vec::new();
         for hit in result.result {
             let score = hit.score;
@@ -170,7 +175,12 @@ impl QdrantVectorStore {
                 out.push((n, b, score));
             }
         }
-        tracing::debug!(collection = %self.collection, hits = out.len(), "qdrant semantic search complete");
+        tracing::debug!(
+            collection = %self.collection,
+            raw_hits,
+            hits = out.len(),
+            "qdrant semantic search complete"
+        );
         Ok(out)
     }
 }

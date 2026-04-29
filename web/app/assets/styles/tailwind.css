@@ -1,29 +1,34 @@
 @import "tailwindcss";
 
 @theme {
-    --font-family-default: "Inter", system-ui, -apple-system, sans-serif;
-    --font-family-rounded: "Inter", system-ui, -apple-system, sans-serif;
+    --font-family-default: var(--font-body);
+    --font-family-rounded: var(--font-heading);
 
-    --font-default: var(--font-family-default);
-    --font-rounded: var(--font-family-rounded);
+    --font-default: var(--font-body);
+    --font-rounded: var(--font-heading);
 
-    --color-bg-base: var(--color-bg-base);
-    --color-bg-raised: var(--color-bg-raised);
-    --color-bg-elevated: var(--color-bg-elevated);
-    --color-bg-overlay: var(--color-bg-overlay);
-    --color-bg-float: var(--color-bg-float);
+    --color-bg-base: var(--bg-base);
+    --color-bg-raised: var(--bg-1);
+    --color-bg-elevated: var(--bg-2);
+    --color-bg-overlay: var(--bg-3);
+    --color-bg-float: var(--bg-4);
+    --color-bg-1: var(--bg-1);
+    --color-bg-2: var(--bg-2);
+    --color-bg-3: var(--bg-3);
+    --color-bg-4: var(--bg-4);
 
-    --color-fg-primary: var(--color-fg-primary);
-    --color-fg-secondary: var(--color-fg-secondary);
-    --color-fg-tertiary: var(--color-fg-tertiary);
-    --color-fg-muted: var(--color-fg-muted);
-    --color-fg-subtle: var(--color-fg-subtle);
+    --color-fg-primary: var(--text-primary);
+    --color-fg-secondary: var(--text-secondary);
+    --color-fg-tertiary: var(--text-tertiary);
+    --color-fg-muted: var(--text-muted);
+    --color-fg-subtle: var(--text-disabled);
 
-    --color-green: var(--color-green);
-    --color-red: var(--color-red);
-    --color-yellow: var(--color-yellow);
-    --color-blue: var(--color-blue);
+    --color-green: var(--success);
+    --color-red: var(--danger);
+    --color-yellow: var(--warning);
+    --color-blue: var(--accent-primary);
+    --color-gold: var(--accent-gold);
 
-    --duration-fast: var(--duration-fast);
-    --duration-slow: var(--duration-slow);
+    --duration-fast: 150ms;
+    --duration-slow: 250ms;
 }
