@@ -1,16 +1,17 @@
 <template>
     <Teleport to="body">
-        <div
-            v-if="open"
-            class="modal-backdrop search-backdrop"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="search-title"
-            @keydown.down.prevent="moveSelection(1)"
-            @keydown.up.prevent="moveSelection(-1)"
-            @keydown.enter.prevent="pickSelected"
-            @keydown.escape.prevent="emit('close')"
-        >
+        <Transition name="search-modal">
+            <div
+                v-if="open"
+                class="modal-backdrop search-backdrop"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="search-title"
+                @keydown.down.prevent="moveSelection(1)"
+                @keydown.up.prevent="moveSelection(-1)"
+                @keydown.enter.prevent="pickSelected"
+                @keydown.escape.prevent="emit('close')"
+            >
             <div class="search-scrim" aria-hidden="true" @click="emit('close')" />
             <section class="modal-surface search-modal" @click.stop>
                 <h2 id="search-title" class="sr-only">Search notes and blocks</h2>
@@ -114,6 +115,7 @@
                 </div>
             </section>
         </div>
+        </Transition>
     </Teleport>
 </template>
 
@@ -380,7 +382,7 @@ function highlight(text: string): Array<{ text: string; match: boolean }> {
     max-height: 560px;
     overflow: hidden;
     border-radius: 12px;
-    background: #1b1a18;
+    background: var(--bg-1);
 }
 
 .search-input-wrap {
@@ -388,7 +390,7 @@ function highlight(text: string): Array<{ text: string; match: boolean }> {
     align-items: center;
     gap: 10px;
     border-bottom: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
-    background: #1b1a18;
+    background: var(--bg-1);
     padding: 12px;
     color: var(--text-muted);
 }
@@ -414,7 +416,7 @@ function highlight(text: string): Array<{ text: string; match: boolean }> {
     max-height: 468px;
     overflow-y: auto;
     padding: 8px;
-    background: #191816;
+    background: var(--bg-base);
 }
 
 .group-label {
@@ -518,5 +520,31 @@ mark {
     50% {
         opacity: 1;
     }
+}
+
+@keyframes search-backdrop-enter {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes search-backdrop-exit {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+.search-modal-enter-active {
+    animation: search-backdrop-enter 250ms var(--ease-out) both;
+}
+
+.search-modal-leave-active {
+    animation: search-backdrop-exit 250ms var(--ease-out) both;
 }
 </style>

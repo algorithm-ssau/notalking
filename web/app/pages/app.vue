@@ -107,7 +107,7 @@
                     Loading workspace...
                 </div>
                 <div v-else-if="!resolvedNoteId" class="editor-state">
-                    <UiAppIcon name="pen" :size="28" />
+                    <UiAppIcon name="pen" :size="20" />
                     <h1>No note selected</h1>
                     <p>Create a note to start writing.</p>
                     <button class="btn btn-primary" type="button" @click="createNote">New note</button>
@@ -391,12 +391,10 @@ onUnmounted(() => {
 <style scoped>
 .app-shell {
     display: grid;
-    grid-template-rows: 40px minmax(0, 1fr);
+    grid-template-rows: 50px minmax(0, 1fr);
     height: 100vh;
     overflow: hidden;
-    background:
-        radial-gradient(circle at 50% -12rem, rgb(61 157 149 / 0.13), transparent 34rem),
-        var(--bg-base);
+    background: var(--bg-base);
     color: var(--text-primary);
 }
 
@@ -478,8 +476,8 @@ onUnmounted(() => {
     height: 26px;
     place-items: center;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-primary), #8bf2ea);
-    color: #061817;
+    background: linear-gradient(135deg, var(--accent-primary), #6ee7dc);
+    color: #0a0a0a;
     font-size: 12px;
     font-weight: 700;
 }
@@ -488,8 +486,8 @@ onUnmounted(() => {
     display: grid;
     min-height: 0;
     grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 10px;
-    padding: 10px;
+    gap: 12px;
+    padding: 12px;
 }
 
 .notes-panel,
@@ -500,7 +498,7 @@ onUnmounted(() => {
     grid-template-columns: minmax(0, 1fr);
     border: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
     border-radius: 12px;
-    background: #1b1a18;
+    background: var(--bg-1);
     overflow: hidden;
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.015);
     transition: width 250ms var(--ease-out);
@@ -525,7 +523,7 @@ onUnmounted(() => {
     min-height: 0;
     border-right: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
     padding: 6px;
-    background: #191816;
+    background: #0f0f0f;
 }
 
 .agent-rail {
@@ -628,7 +626,7 @@ onUnmounted(() => {
 
 .note-row:hover,
 .note-row.is-active {
-    background: #25231f;
+    background: var(--bg-3);
 }
 
 .note-row.is-active button:first-child {
@@ -744,10 +742,8 @@ onUnmounted(() => {
     min-height: 0;
     overflow-y: auto;
     border: 1px solid color-mix(in srgb, var(--bg-3) 70%, transparent);
-    border-radius: 18px;
-    background:
-        linear-gradient(180deg, rgb(255 255 255 / 0.015), transparent 140px),
-        var(--bg-base);
+    border-radius: 12px;
+    background: var(--bg-base);
 }
 
 .editor-state {

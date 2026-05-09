@@ -403,7 +403,7 @@ async function applyFormatItalic() {
 
 .editor-titlebar h1 {
     margin: 0;
-    color: #e3dfd8;
+    color: var(--text-primary);
     font-family: var(--font-heading);
     font-size: clamp(26px, 4vw, 34px);
     font-weight: 500;
@@ -465,9 +465,7 @@ async function applyFormatItalic() {
     justify-items: center;
     border: 1px solid color-mix(in srgb, var(--bg-4) 60%, transparent);
     border-radius: 12px;
-    background:
-        linear-gradient(180deg, rgb(255 255 255 / 0.015), transparent),
-        #1b1a18;
+    background: var(--bg-1);
     padding: 32px;
     text-align: center;
 }

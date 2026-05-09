@@ -1,21 +1,23 @@
 <template>
     <Teleport to="body">
-        <div
-            v-if="open"
-            class="modal-backdrop settings-backdrop"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="settings-title"
-            @keydown.escape.prevent="emit('close')"
-        >
+        <Transition name="settings-modal">
+            <div
+                v-if="open"
+                class="modal-backdrop settings-backdrop"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="settings-title"
+                @keydown.escape.prevent="emit('close')"
+            >
             <div class="settings-scrim" aria-hidden="true" @click="emit('close')" />
             <section class="modal-surface settings-modal" @click.stop>
-                <button class="icon-btn close-button" type="button" aria-label="Close settings" @click="emit('close')">
-                    <UiAppIcon name="close" :size="18" />
-                </button>
-
                 <aside class="settings-nav" aria-label="Settings sections">
-                    <h2 id="settings-title">Settings</h2>
+                    <div class="nav-header">
+                        <h2 id="settings-title">Settings</h2>
+                        <button class="icon-btn close-button" type="button" aria-label="Close settings" @click="emit('close')">
+                            <UiAppIcon name="close" :size="18" />
+                        </button>
+                    </div>
                     <button
                         v-for="section in sections"
                         :key="section.id"
@@ -146,6 +148,7 @@
                 </div>
             </section>
         </div>
+        </Transition>
     </Teleport>
 </template>
 
@@ -234,10 +237,15 @@ async function onRevokeOthers() {
 }
 
 .close-button {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    z-index: 2;
+    position: static;
+}
+
+.nav-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 16px;
 }
 
 .settings-nav {
@@ -481,8 +489,8 @@ async function onRevokeOthers() {
     height: 48px;
     place-items: center;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-primary), #8bf2ea);
-    color: #061817;
+    background: linear-gradient(135deg, var(--accent-primary), #6ee7dc);
+    color: #0a0a0a;
     font-weight: 700;
 }
 
@@ -555,6 +563,25 @@ async function onRevokeOthers() {
     .revoke-wrap,
     .danger-outline {
         width: 100%;
+    }
+}
+
+.settings-modal-enter-active {
+    animation: modal-enter 250ms var(--ease-out) both;
+}
+
+.settings-modal-leave-active {
+    animation: modal-exit 250ms var(--ease-out) both;
+}
+
+@keyframes modal-exit {
+    from {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.98);
     }
 }
 </style>
