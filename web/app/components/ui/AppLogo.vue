@@ -1,12 +1,14 @@
 <template>
-    <NuxtLink class="logo-mark" :to="to" :style="{ fontSize }">
-        Notalking
+    <NuxtLink class="logo-mark" :to="to" :aria-label="ariaLabel">
+        <span v-if="label" class="logo-label">{{ label }}</span>
     </NuxtLink>
 </template>
 
 <script setup lang="ts">
-const { to = '/', fontSize = '17px' } = defineProps<{
+const { to = "/", label = "Notalking" } = defineProps<{
     to?: string;
-    fontSize?: string;
+    label?: string;
 }>();
+
+const ariaLabel = computed(() => label || "Notalking");
 </script>

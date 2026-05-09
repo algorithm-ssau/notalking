@@ -1,11 +1,8 @@
 <template>
     <article class="note-editor">
         <header class="editor-titlebar">
-            <div>
-                <p class="editor-kicker">Current note</p>
-                <h1 class="editor-title">{{ noteTitle || "Untitled note" }}</h1>
-            </div>
-            <button class="btn btn-ghost add-block" type="button" @click="addTextBlock">
+            <h1>{{ noteTitle || "Untitled note" }}</h1>
+            <button class="add-block" type="button" @click="addTextBlock">
                 <UiAppIcon name="plus" :size="16" />
                 Add block
             </button>
@@ -391,129 +388,154 @@ async function applyFormatItalic() {
 .note-editor {
     min-height: 100%;
     color: var(--text-primary);
+    padding: 0 0 40px;
 }
 
 .editor-titlebar {
     display: flex;
+    width: min(584px, calc(100% - 48px));
     align-items: flex-start;
     justify-content: space-between;
-    gap: 24px;
-    padding: 48px 32px 20px;
+    gap: 18px;
+    margin: 0 auto;
+    padding: 28px 0 12px;
 }
 
-.editor-kicker {
-    margin: 0 0 8px;
-    color: var(--text-disabled);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    line-height: 24px;
-    text-transform: uppercase;
-}
-
-.editor-title {
+.editor-titlebar h1 {
     margin: 0;
-    color: var(--text-primary);
+    color: #e3dfd8;
     font-family: var(--font-heading);
-    font-size: 28px;
-    font-weight: 700;
-    letter-spacing: -0.025em;
-    line-height: 36px;
+    font-size: clamp(26px, 4vw, 34px);
+    font-weight: 500;
+    letter-spacing: -0.04em;
+    line-height: 40px;
 }
 
 .add-block {
-    min-height: 36px;
-    padding: 6px 12px;
+    display: inline-flex;
+    min-height: 32px;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid color-mix(in srgb, var(--bg-4) 70%, transparent);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-tertiary);
+    flex: 0 0 auto;
+    margin-top: 2px;
+    padding: 4px 12px;
     font-size: 13px;
+    font-weight: 500;
+    line-height: 20px;
+    cursor: pointer;
+    transition:
+        background-color 150ms ease,
+        border-color 150ms ease,
+        color 150ms ease;
+}
+
+.add-block:hover {
+    background: color-mix(in srgb, var(--bg-3) 70%, transparent);
+    border-color: color-mix(in srgb, var(--accent-primary) 20%, var(--bg-4));
+    color: var(--text-secondary);
 }
 
 .editor-messages {
     display: grid;
+    width: min(584px, calc(100% - 48px));
     gap: 8px;
-    max-width: 760px;
-    padding: 0 32px;
+    margin: 0 auto 10px;
 }
 
 .block-canvas {
-    padding: 0 32px 48px;
+    width: min(584px, calc(100% - 48px));
+    margin: 0 auto;
+    padding: 0;
 }
 
 .block-list {
     display: flex;
     flex-direction: column;
-    width: min(760px, 100%);
+    width: 100%;
 }
 
 .empty-editor {
     display: grid;
-    width: min(760px, 100%);
     min-height: 260px;
-    place-content: start;
-    padding-top: 8px;
+    place-content: center;
+    justify-items: center;
+    border: 1px solid color-mix(in srgb, var(--bg-4) 60%, transparent);
+    border-radius: 12px;
+    background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.015), transparent),
+        #1b1a18;
+    padding: 32px;
+    text-align: center;
 }
 
 .empty-editor p {
     margin: 0 0 16px;
-    color: var(--text-disabled);
+    color: var(--text-tertiary);
     font-size: 16px;
     line-height: 24px;
 }
 
 .empty-editor .btn {
-    justify-self: start;
     min-height: 36px;
-    padding: 6px 12px;
+    border-color: transparent;
+    background: var(--bg-3);
+    color: var(--text-secondary);
+    padding: 6px 14px;
     font-size: 13px;
+    line-height: 20px;
 }
 
 .drop-slot {
     position: relative;
-    height: 6px;
+    height: 4px;
     width: 100%;
 }
 
 .drop-hitbox {
     position: absolute;
-    inset: -12px 0;
+    inset: -10px 0;
     z-index: 1;
 }
 
 .drop-line {
     position: absolute;
-    inset: 2px 8px auto;
+    inset: 1px 0 auto;
     height: 2px;
     border-radius: var(--r-pill);
     background: transparent;
-    transition: background-color 150ms ease;
+    transition: background-color 120ms ease;
 }
 
 .drop-line.is-active {
-    background: color-mix(in srgb, var(--accent-primary) 55%, transparent);
+    background: var(--accent-primary);
 }
 
 .block-row {
+    position: relative;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 32px;
-    gap: 4px;
+    gap: 8px;
     align-items: start;
     transition:
-        opacity 150ms ease,
-        transform 150ms ease;
+        opacity 120ms ease,
+        transform 120ms ease;
 }
 
 .block-row.is-dragging {
-    opacity: 0.6;
-    transform: scale(0.995);
+    opacity: 0.45;
+    transform: scale(0.997);
 }
 
 .block-shell {
     min-width: 0;
-    cursor: text;
 }
 
 .delete-block {
-    margin-top: 4px;
-    color: var(--text-disabled);
+    margin-top: 1px;
     opacity: 0;
 }
 
@@ -525,18 +547,20 @@ async function applyFormatItalic() {
     color: var(--danger);
 }
 
-@media (max-width: 768px) {
-    .editor-titlebar {
-        padding: 32px 20px 16px;
-    }
-
-    .block-canvas,
-    .editor-messages {
-        padding-inline: 20px;
+@media (max-width: 760px) {
+    .editor-titlebar,
+    .editor-messages,
+    .block-canvas {
+        width: min(584px, calc(100% - 28px));
     }
 
     .editor-titlebar {
         flex-direction: column;
+        padding-top: 22px;
+    }
+
+    .block-row {
+        grid-template-columns: minmax(0, 1fr) 28px;
     }
 }
 </style>

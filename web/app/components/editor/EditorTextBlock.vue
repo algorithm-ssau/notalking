@@ -472,43 +472,38 @@ function onEditorClick(ev: MouseEvent) {
     position: relative;
     min-width: 0;
     flex: 1;
-    border-left: 2px solid transparent;
-    border-radius: var(--r-item);
-    padding: 4px 8px 4px 10px;
+    border-radius: 7px;
+    padding: 2px 4px 2px 0;
     transition:
-        background-color 150ms ease,
-        border-color 150ms ease,
-        opacity 150ms ease;
+        background-color 120ms ease,
+        opacity 120ms ease;
 }
 
 .editor-block:hover,
-.editor-block.is-dragging {
-    background: var(--bg-1);
-}
-
+.editor-block.is-dragging,
 .editor-block.is-active {
-    border-left-color: color-mix(in srgb, var(--accent-primary) 50%, transparent);
+    background: rgb(255 255 255 / 0.025);
 }
 
 .drag-handle {
     position: absolute;
     top: 4px;
-    left: -24px;
+    left: -30px;
     display: flex;
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     align-items: center;
     justify-content: center;
     border: 0;
-    border-radius: 6px;
+    border-radius: 5px;
     background: transparent;
-    color: var(--text-muted);
+    color: var(--text-disabled);
     cursor: grab;
     opacity: 0;
     transition:
-        background-color 150ms ease,
-        color 150ms ease,
-        opacity 150ms ease;
+        background-color 120ms ease,
+        color 120ms ease,
+        opacity 120ms ease;
 }
 
 .drag-handle:hover {
@@ -534,6 +529,7 @@ function onEditorClick(ev: MouseEvent) {
 .editor-text {
     min-height: 24px;
     color: var(--text-primary);
+    font-family: var(--font-body);
     font-size: 16px;
     line-height: 24px;
     outline: none;
@@ -545,5 +541,11 @@ function onEditorClick(ev: MouseEvent) {
     content: "Start writing...";
     color: var(--text-disabled);
     pointer-events: none;
+}
+
+@media (max-width: 760px) {
+    .drag-handle {
+        left: -6px;
+    }
 }
 </style>

@@ -34,7 +34,7 @@ const bubbleStyle = computed(() => {
         return {};
     }
     const pad = 8;
-    const top = props.rect.top - pad - 40;
+    const top = props.rect.top - pad - 38;
     const left = props.rect.left + props.rect.width / 2;
     return {
         top: `${Math.max(8, top)}px`,
@@ -49,24 +49,24 @@ const bubbleStyle = computed(() => {
     position: fixed;
     z-index: 80;
     display: flex;
-    gap: 4px;
-    border: 1px solid var(--bg-3);
-    border-radius: var(--r-card);
-    background: var(--bg-2);
+    gap: 3px;
+    border: 1px solid var(--bg-4);
+    border-radius: 9px;
+    background: #1d1c1a;
     padding: 4px;
-    box-shadow: 0 16px 44px rgb(0 0 0 / 0.45);
+    box-shadow: var(--shadow-float);
 }
 
 .format-bubble button {
     display: grid;
-    width: 32px;
+    width: 31px;
     height: 28px;
     place-items: center;
     border: 0;
-    border-radius: var(--r-item);
+    border-radius: 6px;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
     cursor: pointer;
 }

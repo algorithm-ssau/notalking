@@ -1,9 +1,9 @@
 <template>
-    <section class="agent-panel" aria-label="Agent panel">
+    <section class="agent-panel" aria-label="Assistant panel">
         <header class="agent-header">
             <div class="agent-title">
                 <span :class="['status-dot', { 'is-offline': offline }]" />
-                <span>Agent</span>
+                <span>Assistant</span>
             </div>
             <button class="provider-chip" type="button" :disabled="offline">
                 {{ offline ? "Offline" : "Provider" }}
@@ -13,7 +13,7 @@
 
         <div v-if="offline" class="agent-status">
             <UiAppIcon name="warning" :size="16" />
-            Intelligence offline -- agent features unavailable
+            Intelligence offline -- assistant features unavailable
         </div>
 
         <div class="agent-thread">
@@ -21,11 +21,11 @@
                 <div class="agent-empty__icon">
                     <UiAppIcon name="agent" :size="28" />
                 </div>
-                <h2>Agent unavailable</h2>
+                <h2>Assistant unavailable</h2>
                 <p>Start or configure the Intelligence service to use provider-backed note assistance.</p>
             </div>
             <template v-else>
-                <div class="agent-message ai">Ask a question about your notes and I will cite matching blocks.</div>
+                <div class="agent-message ai">Ask a question about your notes and I will use Notalking content as context.</div>
                 <div class="agent-message user">Find open ideas from this week.</div>
                 <div class="agent-message ai">Reading recent note blocks<span class="stream-cursor" /></div>
             </template>
@@ -56,17 +56,17 @@ const { offline = true } = defineProps<{
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr) auto;
     height: 100%;
-    background: var(--bg-1);
+    background: #1b1a18;
 }
 
 .agent-header {
     display: flex;
-    min-height: 48px;
+    min-height: 42px;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
     border-bottom: 1px solid var(--bg-3);
-    padding: 8px 12px 8px 16px;
+    padding: 6px 10px 6px 14px;
 }
 
 .agent-title {
@@ -76,6 +76,7 @@ const { offline = true } = defineProps<{
     color: var(--text-secondary);
     font-size: 14px;
     font-weight: 500;
+    line-height: 24px;
 }
 
 .provider-chip {
@@ -85,7 +86,7 @@ const { offline = true } = defineProps<{
     gap: 6px;
     border: 0;
     border-radius: var(--r-pill);
-    background: var(--bg-3);
+    background: #25231f;
     color: var(--text-muted);
     padding: 0 10px;
     font-size: 12px;
@@ -97,10 +98,10 @@ const { offline = true } = defineProps<{
     align-items: center;
     gap: 8px;
     border-bottom: 1px solid var(--bg-4);
-    background: var(--bg-3);
-    color: var(--text-muted);
+    background: #22201d;
+    color: var(--text-tertiary);
     padding: 8px 12px;
-    font-size: 12px;
+    font-size: 13px;
     line-height: 20px;
 }
 
@@ -121,28 +122,29 @@ const { offline = true } = defineProps<{
 
 .agent-empty__icon {
     display: grid;
-    width: 56px;
-    height: 56px;
+    width: 48px;
+    height: 48px;
     place-items: center;
     border: 1px solid var(--bg-3);
     border-radius: 50%;
-    background: var(--bg-2);
-    color: var(--accent-gold);
+    background: #22201d;
+    color: var(--accent-primary);
 }
 
 .agent-empty h2 {
     margin: 16px 0 6px;
     color: var(--text-secondary);
-    font-family: var(--font-heading);
     font-size: 18px;
+    font-weight: 500;
+    line-height: 24px;
 }
 
 .agent-empty p {
     max-width: 220px;
     margin: 0;
     color: var(--text-muted);
-    font-size: 13px;
-    line-height: 22px;
+    font-size: 14px;
+    line-height: 24px;
 }
 
 .agent-message {
@@ -162,12 +164,12 @@ const { offline = true } = defineProps<{
 
 .agent-message.ai {
     border: 1px solid var(--bg-3);
-    background: var(--bg-2);
+    background: #22201d;
 }
 
 .agent-message.user {
     margin-left: auto;
-    background: var(--bg-3);
+    background: #2b2925;
 }
 
 .stream-cursor {
@@ -195,7 +197,7 @@ const { offline = true } = defineProps<{
 .agent-input {
     min-height: 44px;
     padding-right: 48px;
-    background: var(--bg-2);
+    background: #22201d;
 }
 
 .send-button {
@@ -208,8 +210,8 @@ const { offline = true } = defineProps<{
     place-items: center;
     border: 0;
     border-radius: 50%;
-    background: var(--accent-gold);
-    color: #000;
+    background: var(--accent-primary);
+    color: #071514;
     cursor: pointer;
 }
 

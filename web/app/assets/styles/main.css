@@ -1,66 +1,35 @@
 @import "./tailwind.css";
 
-@font-face {
-    font-family: "Open Runde";
-    src: url("../fonts/OpenRunde-Regular.woff2") format("woff2");
-    font-weight: 400;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: "Open Runde";
-    src: url("../fonts/OpenRunde-Medium.woff2") format("woff2");
-    font-weight: 500;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: "Open Runde";
-    src: url("../fonts/OpenRunde-Semibold.woff2") format("woff2");
-    font-weight: 600;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: "Open Runde";
-    src: url("../fonts/OpenRunde-Bold.woff2") format("woff2");
-    font-weight: 700;
-    font-style: normal;
-    font-display: swap;
-}
-
 :root {
-    --bg-base: #09090b;
-    --bg-1: #151619;
-    --bg-2: #1e2024;
-    --bg-3: #272a30;
-    --bg-4: #30343b;
+    --bg-base: #171614;
+    --bg-1: #1b1a18;
+    --bg-2: #22211e;
+    --bg-3: #2c2a26;
+    --bg-4: #38352f;
 
-    --text-primary: #f4f5f6;
-    --text-secondary: #c7ccd1;
-    --text-tertiary: #9aa3ac;
-    --text-muted: #6e7a86;
-    --text-disabled: #4a525a;
+    --text-primary: #ebe7df;
+    --text-secondary: #d4cec3;
+    --text-tertiary: #aaa399;
+    --text-muted: #817a71;
+    --text-disabled: #5c554d;
 
-    --accent-primary: #0f66f5;
-    --accent-gold: #c9a96e;
-    --success: #27ae60;
+    --accent-primary: #31c6bb;
+    --accent-gold: #31c6bb;
+    --success: #31c6bb;
     --danger: #e74c3c;
     --warning: #f1c40f;
 
     --r-pill: 100px;
-    --r-card: 20px;
-    --r-input: 12px;
-    --r-item: 10px;
+    --r-card: 12px;
+    --r-input: 10px;
+    --r-item: 8px;
 
-    --font-body: "Inter", system-ui, -apple-system, sans-serif;
-    --font-heading: "Open Runde", system-ui, -apple-system, sans-serif;
+    --shadow-soft: 0 24px 80px rgb(0 0 0 / 0.35);
+    --shadow-float: 0 24px 80px rgb(0 0 0 / 0.8);
+    --font-body: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-heading: var(--font-body);
     --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
-    /* Backward-compatible aliases for existing Tailwind utility names. */
     --color-bg-base: var(--bg-base);
     --color-bg-raised: var(--bg-1);
     --color-bg-elevated: var(--bg-2);
@@ -75,16 +44,9 @@
     --color-red: var(--danger);
     --color-yellow: var(--warning);
     --color-blue: var(--accent-primary);
+    --color-gold: var(--accent-gold);
     --duration-fast: 150ms;
     --duration-slow: 250ms;
-}
-
-[data-surface="marketing"] {
-    --bg-base: #000;
-    --bg-1: #0a0a0a;
-    --bg-2: #111;
-    --bg-3: #181818;
-    --bg-4: #1a1a1a;
 }
 
 * {
@@ -92,14 +54,16 @@
 }
 
 html {
+    min-height: 100%;
     background: var(--bg-base);
     color-scheme: dark;
 }
 
 body {
     min-width: 320px;
+    min-height: 100%;
     margin: 0;
-    background-color: var(--bg-base);
+    background: var(--bg-base);
     color: var(--text-primary);
     font-family: var(--font-body);
     font-size: 16px;
@@ -119,6 +83,10 @@ button {
     color: inherit;
 }
 
+a {
+    color: inherit;
+}
+
 ::selection {
     background: color-mix(in srgb, var(--accent-primary) 25%, transparent);
 }
@@ -129,22 +97,22 @@ button {
 }
 
 .surface-card {
-    border: 1px solid var(--bg-3);
+    border: 1px solid color-mix(in srgb, var(--bg-3) 70%, transparent);
     border-radius: var(--r-card);
     background: var(--bg-2);
-    box-shadow: 0 24px 80px rgb(0 0 0 / 0.35);
+    box-shadow: var(--shadow-soft);
 }
 
 .btn {
     display: inline-flex;
-    min-height: 48px;
+    min-height: 44px;
     align-items: center;
     justify-content: center;
     gap: 8px;
     border: 0;
-    border-radius: 24px;
-    padding: 12px 24px;
-    font-size: 16px;
+    border-radius: 10px;
+    padding: 10px 20px;
+    font-size: 15px;
     font-weight: 600;
     line-height: 24px;
     text-decoration: none;
@@ -164,7 +132,9 @@ button {
 .btn:focus-visible,
 .input:focus-visible,
 .icon-btn:focus-visible,
-.list-row:focus-visible {
+.list-row:focus-visible,
+textarea:focus-visible,
+input:focus-visible {
     outline: 2px solid var(--accent-primary);
     outline-offset: 2px;
 }
@@ -172,20 +142,15 @@ button {
 .btn:disabled,
 .input:disabled,
 textarea:disabled,
-select:disabled {
+select:disabled,
+button:disabled {
     cursor: not-allowed;
     opacity: 0.4;
 }
 
 .btn-primary {
     background: var(--accent-primary);
-    color: #fff;
-}
-
-[data-surface="marketing"] .btn-primary,
-.btn-primary-marketing {
-    background: var(--text-primary);
-    color: #000;
+    color: #061817;
 }
 
 .btn-secondary {
@@ -196,7 +161,8 @@ select:disabled {
 
 .btn-secondary:hover:not(:disabled) {
     background: var(--bg-3);
-    color: var(--text-primary);
+    border-color: color-mix(in srgb, var(--accent-primary) 45%, var(--bg-4));
+    color: var(--accent-primary);
 }
 
 .btn-danger {
@@ -211,17 +177,17 @@ select:disabled {
 
 .btn-ghost:hover:not(:disabled) {
     background: var(--bg-3);
-    color: var(--text-secondary);
+    color: var(--accent-primary);
 }
 
 .icon-btn {
     display: inline-flex;
-    height: 32px;
-    width: 32px;
+    height: 36px;
+    width: 36px;
     align-items: center;
     justify-content: center;
     border: 0;
-    border-radius: var(--r-pill);
+    border-radius: 8px;
     background: transparent;
     color: var(--text-muted);
     transition:
@@ -231,9 +197,10 @@ select:disabled {
     cursor: pointer;
 }
 
-.icon-btn:hover:not(:disabled) {
+.icon-btn:hover:not(:disabled),
+.icon-btn.is-active {
     background: var(--bg-3);
-    color: var(--text-primary);
+    color: var(--accent-primary);
 }
 
 .input,
@@ -241,7 +208,7 @@ select:disabled {
     width: 100%;
     border: 1px solid var(--bg-3);
     border-radius: var(--r-input);
-    background: var(--bg-4);
+    background: var(--bg-3);
     color: var(--text-primary);
     outline: none;
     transition:
@@ -251,13 +218,15 @@ select:disabled {
 }
 
 .input {
-    height: 48px;
+    height: 40px;
     padding: 0 12px;
+    font-size: 14px;
 }
 
 .textarea {
-    min-height: 48px;
-    padding: 12px;
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 14px;
     resize: none;
 }
 
@@ -282,7 +251,7 @@ select:disabled {
 
 .list-row {
     display: flex;
-    min-height: 40px;
+    min-height: 36px;
     align-items: center;
     gap: 8px;
     border: 0;
@@ -314,10 +283,10 @@ select:disabled {
 }
 
 .modal-surface {
-    border: 1px solid var(--bg-3);
+    border: 1px solid color-mix(in srgb, var(--bg-3) 70%, transparent);
     border-radius: var(--r-card);
     background: var(--bg-2);
-    box-shadow: 0 24px 80px rgb(0 0 0 / 0.8);
+    box-shadow: var(--shadow-float);
     animation: modal-enter 250ms var(--ease-out) both;
 }
 
@@ -326,19 +295,23 @@ select:disabled {
     align-items: center;
     gap: 10px;
     color: var(--text-primary);
-    font-family: var(--font-heading);
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: -0.015em;
     text-decoration: none;
 }
 
 .logo-mark::before {
     content: "";
-    width: 7px;
-    height: 7px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
-    background: var(--accent-gold);
-    box-shadow: 0 0 20px color-mix(in srgb, var(--accent-gold) 60%, transparent);
+    background: var(--accent-primary);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent-primary) 60%, transparent);
+}
+
+.logo-label {
+    font-size: 17px;
+    line-height: 24px;
 }
 
 .status-dot {
@@ -354,14 +327,29 @@ select:disabled {
     box-shadow: none;
 }
 
-.error-chip {
-    border-left: 3px solid var(--danger);
+.error-chip,
+.hint-chip,
+.success-chip {
     border-radius: var(--r-input);
     background: var(--bg-3);
     color: var(--text-secondary);
     padding: 10px 12px;
-    font-size: 14px;
-    line-height: 24px;
+    font-size: 13px;
+    line-height: 20px;
+    border-left: 3px solid transparent;
+}
+
+.error-chip {
+    border-left: 3px solid var(--danger);
+}
+
+.hint-chip {
+    border-left: 3px solid var(--accent-primary);
+}
+
+.success-chip {
+    border-left: 3px solid var(--success);
+    color: var(--success);
 }
 
 @keyframes modal-enter {
@@ -396,17 +384,5 @@ select:disabled {
     40%,
     60% {
         transform: translateX(4px);
-    }
-}
-
-@keyframes fade-up {
-    from {
-        opacity: 0;
-        transform: translateY(18px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
     }
 }

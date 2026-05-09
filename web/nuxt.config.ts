@@ -5,6 +5,13 @@ export default defineNuxtConfig({
     devtools: { enabled: true },
     app: {
         head: {
+            title: "Notalking",
+            meta: [
+                {
+                    name: "description",
+                    content: "Structured notes with optional AI context.",
+                },
+            ],
             link: [
                 {
                     rel: "preconnect",

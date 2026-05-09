@@ -365,7 +365,7 @@ function highlight(text: string): Array<{ text: string; match: boolean }> {
 .search-backdrop {
     align-items: flex-start;
     justify-content: center;
-    padding: 20vh 16px 16px;
+    padding: 18vh 16px 16px;
 }
 
 .search-scrim {
@@ -375,32 +375,35 @@ function highlight(text: string): Array<{ text: string; match: boolean }> {
 
 .search-modal {
     position: relative;
-    width: min(560px, 100%);
-    min-height: 64px;
-    max-height: 480px;
+    width: min(520px, 100%);
+    min-height: 70px;
+    max-height: 560px;
     overflow: hidden;
+    border-radius: 12px;
+    background: #1b1a18;
 }
 
 .search-input-wrap {
     display: flex;
     align-items: center;
-    gap: 12px;
-    border-bottom: 1px solid var(--bg-3);
-    background: var(--bg-2);
-    padding: 8px;
+    gap: 10px;
+    border-bottom: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
+    background: #1b1a18;
+    padding: 12px;
     color: var(--text-muted);
 }
 
 .search-input-wrap input {
     min-width: 0;
     flex: 1;
-    height: 48px;
+    height: 42px;
     border: 0;
-    border-radius: var(--r-input);
-    background: var(--bg-3);
+    border-radius: 8px;
+    background: transparent;
     color: var(--text-primary);
     outline: none;
-    padding: 0 12px;
+    padding: 0 4px;
+    font-size: 14px;
 }
 
 .search-input-wrap input::placeholder {
@@ -408,32 +411,31 @@ function highlight(text: string): Array<{ text: string; match: boolean }> {
 }
 
 .search-results {
-    max-height: 408px;
+    max-height: 468px;
     overflow-y: auto;
     padding: 8px;
+    background: #191816;
 }
 
 .group-label {
-    margin: 10px 10px 6px;
+    margin: 11px 9px 6px;
     color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font-size: 11px;
+    font-weight: 500;
 }
 
 .result-row {
     display: grid;
     width: 100%;
-    min-height: 44px;
-    grid-template-columns: 16px minmax(0, 1fr) auto;
+    min-height: 40px;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
     border: 0;
-    border-radius: var(--r-item);
+    border-radius: 8px;
     background: transparent;
     color: var(--text-muted);
-    padding: 7px 10px;
+    padding: 6px 10px;
     text-align: left;
     cursor: pointer;
 }
@@ -457,36 +459,29 @@ function highlight(text: string): Array<{ text: string; match: boolean }> {
 }
 
 .result-main strong {
-    color: var(--text-primary);
-    font-size: 14px;
+    color: var(--text-secondary);
+    font-size: 13px;
     font-weight: 500;
 }
 
 .result-main small,
 .result-row time {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 mark {
-    background: transparent;
-    color: var(--accent-gold);
+    border-radius: 3px;
+    background: rgb(31 127 123 / 0.36);
+    color: var(--text-primary);
+    padding: 0 1px;
 }
 
-.hint-chip {
-    border-radius: var(--r-input);
-    background: var(--bg-3);
+.empty-state,
+.loading-line {
+    margin: 12px 10px;
     color: var(--text-muted);
-    padding: 10px 12px;
-    font-size: 13px;
-    line-height: 22px;
-}
-
-.empty-state {
-    margin: 24px 8px;
-    color: var(--text-muted);
-    text-align: center;
-    font-size: 14px;
+    font-size: 12px;
 }
 
 .empty-state code {
@@ -495,17 +490,15 @@ mark {
 
 .loading-line {
     display: flex;
-    justify-content: center;
     gap: 5px;
-    padding: 24px;
 }
 
 .loading-line span {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
     background: var(--text-muted);
-    animation: dot 900ms ease-in-out infinite;
+    animation: pulse 900ms ease-in-out infinite;
 }
 
 .loading-line span:nth-child(2) {
@@ -516,33 +509,14 @@ mark {
     animation-delay: 240ms;
 }
 
-@keyframes dot {
+@keyframes pulse {
     0%,
     100% {
         opacity: 0.25;
-        transform: translateY(0);
     }
 
     50% {
         opacity: 1;
-        transform: translateY(-3px);
-    }
-}
-
-@media (max-width: 768px) {
-    .search-backdrop {
-        align-items: stretch;
-        padding: 0;
-    }
-
-    .search-modal {
-        width: 100%;
-        max-height: none;
-        border-radius: 0;
-    }
-
-    .search-results {
-        max-height: calc(100vh - 65px);
     }
 }
 </style>

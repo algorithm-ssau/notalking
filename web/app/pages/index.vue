@@ -1,152 +1,100 @@
 <template>
-    <main data-surface="marketing" class="marketing-page">
-        <nav class="marketing-nav" aria-label="Landing navigation">
-            <div class="marketing-nav__inner">
-                <UiAppLogo />
-                <div class="marketing-nav__links">
-                    <a href="#features">Features</a>
-                    <a href="#flow">How it works</a>
-                    <a href="#stack">Stack</a>
-                    <a href="#mcp">MCP</a>
-                </div>
-                <NuxtLink class="btn btn-primary nav-cta" to="/register">
-                    Get started
-                </NuxtLink>
+    <main class="landing-page">
+        <nav class="landing-nav" aria-label="Landing navigation">
+            <UiAppLogo />
+            <div class="landing-links">
+                <a href="#features">Features</a>
+                <a href="#workflow">Workflow</a>
+                <a href="#stack">Stack</a>
             </div>
+            <NuxtLink class="btn btn-primary" to="/register">Get started</NuxtLink>
         </nav>
 
         <section class="hero" aria-labelledby="hero-title">
-            <div class="hero__grid" aria-hidden="true" />
-            <div class="hero__glow" aria-hidden="true" />
-            <div class="hero__content rv">
-                <p class="hero-badge">
-                    <span class="status-dot" />
-                    Local-first editor shell for agentic notes
-                </p>
-                <h1 id="hero-title" class="hero-title">
-                    Notes that stay quiet until your <em>agent needs context</em>.
-                </h1>
-                <p class="hero-copy">
-                    Notalking combines a block editor, semantic search, and optional
-                    intelligence services so your notes remain usable even when AI is offline.
-                </p>
-                <div class="hero-actions">
-                    <NuxtLink class="btn btn-primary" to="/register">
-                        Start writing
-                    </NuxtLink>
-                    <NuxtLink class="btn btn-secondary" to="/login">
-                        Sign in
-                    </NuxtLink>
-                </div>
+            <p class="hero-badge">
+                <span class="status-dot" />
+                Structured notes with optional AI assistance
+            </p>
+            <h1 id="hero-title">Notalking keeps your notes usable first.</h1>
+            <p class="hero-copy">
+                Write block-based notes, search your knowledge, and connect an assistant when Intelligence is available.
+                Core editing stays fast and reliable even when AI services are offline.
+            </p>
+            <div class="hero-actions">
+                <NuxtLink class="btn btn-primary" to="/register">Create account</NuxtLink>
+                <NuxtLink class="btn btn-secondary" to="/login">Sign in</NuxtLink>
             </div>
 
-            <div class="app-preview rv" aria-label="Application preview">
-                <div class="browser-chrome">
-                    <span />
-                    <span />
-                    <span />
-                    <div class="url-pill">notalking.local/app</div>
-                </div>
-                <div class="preview-shell">
-                    <aside class="preview-sidebar">
-                        <div class="preview-label">Notes</div>
-                        <div class="preview-row is-active">Research index</div>
-                        <div class="preview-row">Voice notes</div>
-                        <div class="preview-row">Agent plan</div>
-                    </aside>
-                    <article class="preview-editor">
-                        <h2>Research index</h2>
-                        <p>Capture blocks, preserve structure, and let semantic search keep everything reachable.</p>
-                        <p class="preview-line" />
-                        <p class="preview-line short" />
-                    </article>
-                    <aside class="preview-agent">
-                        <div class="preview-label gold">Agent</div>
-                        <div class="chat-bubble ai">I found three related notes with matching blocks.</div>
-                        <div class="chat-bubble user">Summarize the pattern.</div>
-                    </aside>
-                </div>
-                <div class="preview-fade" aria-hidden="true" />
+            <div class="product-preview" aria-label="Notalking app preview">
+                <aside class="preview-notes">
+                    <p>Notes</p>
+                    <span class="preview-search">Search notes</span>
+                    <span class="is-active">Research index</span>
+                    <span>Voice capture</span>
+                    <span>Assistant setup</span>
+                </aside>
+                <article class="preview-editor">
+                    <p>Current note</p>
+                    <h2>Research index</h2>
+                    <span>Capture blocks, preserve order, and keep every note ready for semantic recall.</span>
+                    <div class="preview-line" />
+                    <div class="preview-line short" />
+                </article>
+                <aside class="preview-agent">
+                    <p>Assistant</p>
+                    <div class="agent-status-card">Intelligence offline -- notes remain editable.</div>
+                    <div class="agent-bubble">When enabled, the assistant can use your notes as context.</div>
+                </aside>
             </div>
         </section>
 
-        <section id="features" class="marketing-section rv" aria-labelledby="features-title">
+        <section id="features" class="section" aria-labelledby="features-title">
             <p class="section-kicker">Features</p>
-            <h2 id="features-title">A calm workspace with agent hooks built in.</h2>
+            <h2 id="features-title">Everything needed for Notalking's MVP.</h2>
             <div class="feature-grid">
                 <article v-for="feature in features" :key="feature.title" class="feature-card">
-                    <span class="feature-icon"><UiAppIcon :name="feature.icon" :size="24" /></span>
+                    <UiAppIcon :name="feature.icon" :size="24" />
                     <h3>{{ feature.title }}</h3>
                     <p>{{ feature.copy }}</p>
                 </article>
             </div>
         </section>
 
-        <section id="flow" class="marketing-section how-it-works rv" aria-labelledby="flow-title">
+        <section id="workflow" class="section split-section" aria-labelledby="workflow-title">
             <div>
-                <p class="section-kicker">How it works</p>
-                <h2 id="flow-title">Write first. Ask later.</h2>
-                <div class="step-list">
-                    <article v-for="(step, index) in steps" :key="step.title" class="step-card">
-                        <span>{{ index + 1 }}</span>
-                        <div>
-                            <h3>{{ step.title }}</h3>
-                            <p>{{ step.copy }}</p>
-                        </div>
-                    </article>
-                </div>
+                <p class="section-kicker">Workflow</p>
+                <h2 id="workflow-title">Write, search, then ask when useful.</h2>
+                <p>
+                    Notalking separates the editor from optional intelligence. You can keep writing and managing notes
+                    while provider-backed features reconnect in the assistant panel.
+                </p>
             </div>
-            <div class="conversation-panel">
-                <div class="message ai">Core keeps notes available without Intelligence.</div>
-                <div class="message user">What happens when AI returns?</div>
-                <div class="message ai">The agent reconnects, fetches providers, and can cite note blocks.</div>
+            <div class="workflow-card">
+                <div v-for="(step, index) in workflow" :key="step.title" class="workflow-step">
+                    <span>{{ index + 1 }}</span>
+                    <div>
+                        <h3>{{ step.title }}</h3>
+                        <p>{{ step.copy }}</p>
+                    </div>
+                </div>
             </div>
         </section>
 
-        <section id="stack" class="marketing-section rv" aria-labelledby="stack-title">
+        <section id="stack" class="section" aria-labelledby="stack-title">
             <p class="section-kicker">Stack</p>
-            <h2 id="stack-title">Explicit service boundaries, visible in the UI.</h2>
+            <h2 id="stack-title">Built with Nuxt, Tailwind, Pinia, and TypeScript.</h2>
             <div class="stack-grid">
                 <article v-for="item in stack" :key="item.name" class="stack-card">
-                    <span :class="['stack-badge', item.tone]">{{ item.badge }}</span>
+                    <strong>{{ item.badge }}</strong>
                     <h3>{{ item.name }}</h3>
                     <p>{{ item.copy }}</p>
                 </article>
             </div>
         </section>
 
-        <section id="mcp" class="marketing-section mcp-section rv" aria-labelledby="mcp-title">
-            <div>
-                <p class="section-kicker">MCP</p>
-                <h2 id="mcp-title">Your notes are a tool surface, not a silo.</h2>
-                <p>
-                    Core exposes session-scoped MCP tools for resolving notes, reading blocks,
-                    semantic search, and editor-equivalent mutations. External agents can work
-                    with the same knowledge graph the browser edits.
-                </p>
-                <NuxtLink class="btn btn-secondary" to="/login">Open the app</NuxtLink>
-            </div>
-            <div class="mcp-diagram" aria-hidden="true">
-                <div class="diagram-node browser">Browser</div>
-                <div class="diagram-node core">Core</div>
-                <div class="diagram-node mcp">MCP client</div>
-                <div class="diagram-line one" />
-                <div class="diagram-line two" />
-            </div>
-        </section>
-
-        <section class="marketing-cta rv" aria-labelledby="cta-title">
-            <p class="section-kicker">Ready</p>
-            <h2 id="cta-title">Start with notes. Add intelligence when it is useful.</h2>
-            <div class="hero-actions">
-                <NuxtLink class="btn btn-primary" to="/register">Create account</NuxtLink>
-                <NuxtLink class="btn btn-secondary" to="/login">Sign in</NuxtLink>
-            </div>
-        </section>
-
-        <footer class="marketing-footer">
+        <footer class="landing-footer">
             <UiAppLogo />
-            <p>Built for structured notes, semantic recall, and quiet AI assistance.</p>
+            <p>Notalking -- structured notes with optional AI context.</p>
         </footer>
     </main>
 </template>
@@ -155,160 +103,90 @@
 const features = [
     {
         icon: "pen",
-        title: "Block-native notes",
-        copy: "Write in small structured blocks that Core can patch, move, search, and expose to tools.",
+        title: "Block editor",
+        copy: "Create structured notes that Core can patch, move, delete, and expose consistently.",
     },
     {
         icon: "search",
-        title: "Semantic recall",
-        copy: "Search note titles locally and ask Core for embedding-backed block matches when configured.",
+        title: "Search",
+        copy: "Jump to notes by title and use semantic search when embeddings are configured.",
     },
     {
         icon: "agent",
         title: "Optional Intelligence",
-        copy: "Agent and voice features degrade inside the panel when the Intelligence service is unavailable.",
+        copy: "Assistant and voice features stay behind a separate service so the editor remains available.",
     },
 ] as const;
 
-const steps = [
-    {
-        title: "Capture",
-        copy: "Create notes and blocks in the editor without needing any AI service online.",
-    },
-    {
-        title: "Retrieve",
-        copy: "Use global search to jump to recent notes, title matches, or semantic block results.",
-    },
-    {
-        title: "Delegate",
-        copy: "When Intelligence is reachable, providers and agent features appear in their own panel.",
-    },
+const workflow = [
+    { title: "Capture", copy: "Write notes without requiring any provider or model to be online." },
+    { title: "Retrieve", copy: "Use the global search dialog to find notes and matching blocks." },
+    { title: "Assist", copy: "Enable Intelligence for LLM and voice workflows when the service is ready." },
 ] as const;
 
 const stack = [
-    { badge: "Rust", tone: "rust", name: "Core", copy: "Axum owns auth, notes, blocks, sessions, MCP, and semantic search." },
-    { badge: "Python", tone: "python", name: "Intelligence", copy: "FastAPI hosts LLM and voice adapters without blocking the editor." },
-    { badge: "Nuxt", tone: "nuxt", name: "Web", copy: "Nuxt 4 renders the editor shell, auth pages, modals, and client state." },
-    { badge: "Data", tone: "storage", name: "Storage", copy: "PostgreSQL, SQLite dev mode, Redis, and Qdrant stay behind adapters." },
+    { badge: "Nuxt", name: "Web app", copy: "File-based routes and typed Vue components for the browser client." },
+    { badge: "Tailwind", name: "Styling", copy: "Utility-ready styling backed by shared CSS variables." },
+    { badge: "Pinia", name: "State", copy: "Session-wide state for settings and device management." },
+    { badge: "TypeScript", name: "Contracts", copy: "Typed DTOs for notes, blocks, sessions, and search results." },
 ] as const;
-
-let revealObserver: IntersectionObserver | null = null;
-
-onMounted(() => {
-    const els = Array.from(document.querySelectorAll<HTMLElement>(".rv"));
-    revealObserver = new IntersectionObserver(
-        (entries) => {
-            for (const entry of entries) {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add("vis");
-                    revealObserver?.unobserve(entry.target);
-                }
-            }
-        },
-        { threshold: 0.12 },
-    );
-    els.forEach((el) => revealObserver?.observe(el));
-});
-
-onUnmounted(() => revealObserver?.disconnect());
 </script>
 
 <style scoped>
-.marketing-page {
+.landing-page {
     min-height: 100vh;
     overflow-x: hidden;
     background:
-        radial-gradient(circle at 50% 8%, rgb(201 169 110 / 0.12), transparent 34rem),
+        radial-gradient(circle at 50% 0%, rgb(15 102 245 / 0.14), transparent 32rem),
         var(--bg-base);
     color: var(--text-primary);
 }
 
-.marketing-nav {
-    position: fixed;
-    top: 0;
-    right: 0;
-    left: 0;
-    z-index: 40;
-    height: 56px;
-    border-bottom: 1px solid rgb(255 255 255 / 0.04);
-    background: rgb(0 0 0 / 0.75);
-    backdrop-filter: blur(20px);
-}
-
-.marketing-nav__inner {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: center;
-    width: min(1040px, calc(100% - 32px));
-    height: 100%;
+.landing-nav,
+.section,
+.landing-footer {
+    width: min(1040px, calc(100% - 48px));
     margin: 0 auto;
 }
 
-.marketing-nav__links {
+.landing-nav {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 24px;
+    min-height: 72px;
+}
+
+.landing-links {
     display: flex;
     align-items: center;
     gap: 4px;
 }
 
-.marketing-nav__links a {
+.landing-links a {
     border-radius: var(--r-pill);
-    padding: 6px 12px;
     color: var(--text-muted);
-    font-size: 14px;
-    line-height: 24px;
+    padding: 6px 12px;
     text-decoration: none;
-    transition: 150ms ease;
 }
 
-.marketing-nav__links a:hover {
+.landing-links a:hover {
     background: var(--bg-3);
     color: var(--text-primary);
 }
 
-.nav-cta {
+.landing-nav .btn {
     justify-self: end;
     min-height: 40px;
-    padding: 8px 20px;
-    font-size: 14px;
+    padding: 8px 18px;
 }
 
 .hero {
-    position: relative;
     display: grid;
-    min-height: 100vh;
-    place-items: center;
-    padding: 120px 24px 40px;
-}
-
-.hero__grid {
-    position: absolute;
-    inset: 0;
-    opacity: 0.35;
-    background-image:
-        linear-gradient(rgb(255 255 255 / 0.08) 1px, transparent 1px),
-        linear-gradient(90deg, rgb(255 255 255 / 0.08) 1px, transparent 1px);
-    background-size: 60px 60px;
-    mask-image: radial-gradient(circle at center, #000 0, transparent 72%);
-}
-
-.hero__glow {
-    position: absolute;
-    top: 18%;
-    left: 50%;
-    width: 520px;
-    height: 260px;
-    border-radius: 999px;
-    background: rgb(201 169 110 / 0.18);
-    filter: blur(70px);
-    transform: translateX(-50%);
-}
-
-.hero__content {
-    position: relative;
-    z-index: 1;
-    display: grid;
+    width: min(1040px, calc(100% - 48px));
     justify-items: center;
-    max-width: 860px;
+    margin: 0 auto;
+    padding: 96px 0 72px;
     text-align: center;
 }
 
@@ -319,35 +197,24 @@ onUnmounted(() => revealObserver?.disconnect());
     border: 1px solid var(--bg-4);
     border-radius: var(--r-pill);
     background: var(--bg-2);
-    padding: 6px 12px;
     color: var(--text-secondary);
-    font-size: 12.5px;
-    font-weight: 500;
-    line-height: 24px;
+    padding: 6px 12px;
 }
 
-.hero-title {
-    max-width: 860px;
+.hero h1 {
+    max-width: 820px;
     margin: 24px 0 0;
-    font-family: var(--font-heading);
-    font-size: clamp(44px, 7.5vw, 86px);
-    font-weight: 700;
-    letter-spacing: -0.035em;
-    line-height: 0.95;
-}
-
-.hero-title em {
-    color: var(--accent-gold);
-    font-style: italic;
+    font-size: clamp(44px, 7vw, 76px);
+    line-height: 1;
+    letter-spacing: -0.04em;
 }
 
 .hero-copy {
-    max-width: 480px;
+    max-width: 660px;
     margin: 24px 0 0;
-    color: var(--text-muted);
+    color: var(--text-tertiary);
     font-size: 18px;
-    font-weight: 300;
-    line-height: 1.7;
+    line-height: 30px;
 }
 
 .hero-actions {
@@ -358,58 +225,30 @@ onUnmounted(() => revealObserver?.disconnect());
     margin-top: 32px;
 }
 
-.app-preview {
-    position: relative;
-    z-index: 1;
-    width: min(920px, 100%);
-    margin-top: -7vh;
-    overflow: hidden;
-    border: 1px solid var(--bg-3);
-    border-radius: 24px;
-    background: var(--bg-1);
-    box-shadow: 0 40px 120px rgb(0 0 0 / 0.7);
-}
-
-.browser-chrome {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    height: 44px;
-    border-bottom: 1px solid var(--bg-3);
-    padding: 0 16px;
-}
-
-.browser-chrome span {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--bg-4);
-}
-
-.url-pill {
-    flex: 1;
-    max-width: 340px;
-    margin-left: 8px;
-    border-radius: var(--r-pill);
-    background: var(--bg-3);
-    color: var(--text-muted);
-    padding: 3px 12px;
-    font-size: 12px;
-}
-
-.preview-shell {
+.product-preview {
     display: grid;
-    grid-template-columns: 200px minmax(0, 1fr) 260px;
-    min-height: 360px;
-}
-
-.preview-sidebar,
-.preview-agent {
+    grid-template-columns: 220px minmax(0, 1fr) 280px;
+    width: 100%;
+    min-height: 380px;
+    overflow: hidden;
+    margin-top: 64px;
+    border: 1px solid var(--bg-3);
+    border-radius: 28px;
     background: var(--bg-1);
-    padding: 20px;
+    box-shadow: var(--shadow-soft);
+    text-align: left;
 }
 
-.preview-sidebar {
+.preview-notes,
+.preview-agent {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    background: var(--bg-1);
+    padding: 24px;
+}
+
+.preview-notes {
     border-right: 1px solid var(--bg-3);
 }
 
@@ -417,8 +256,11 @@ onUnmounted(() => revealObserver?.disconnect());
     border-left: 1px solid var(--bg-3);
 }
 
-.preview-label {
-    margin-bottom: 16px;
+.preview-notes p,
+.preview-agent p,
+.preview-editor p,
+.section-kicker {
+    margin: 0;
     color: var(--text-muted);
     font-size: 12px;
     font-weight: 700;
@@ -426,189 +268,130 @@ onUnmounted(() => revealObserver?.disconnect());
     text-transform: uppercase;
 }
 
-.preview-label.gold {
-    color: var(--accent-gold);
-}
-
-.preview-row {
+.preview-notes span,
+.preview-search,
+.agent-status-card,
+.agent-bubble {
     border-radius: var(--r-item);
-    padding: 8px 10px;
     color: var(--text-muted);
-    font-size: 14px;
+    padding: 8px 10px;
 }
 
-.preview-row.is-active {
+.preview-notes span.is-active,
+.agent-status-card {
     background: var(--bg-3);
     color: var(--text-primary);
 }
 
+.preview-search {
+    background: var(--bg-2);
+    color: var(--text-disabled);
+}
+
 .preview-editor {
-    padding: 48px 32px;
+    padding: 48px 40px;
 }
 
 .preview-editor h2 {
-    margin: 0;
-    font-family: var(--font-heading);
-    font-size: 28px;
+    margin: 16px 0 12px;
+    font-size: 32px;
+    line-height: 40px;
     letter-spacing: -0.02em;
 }
 
-.preview-editor p {
-    max-width: 480px;
-    color: var(--text-muted);
+.preview-editor span,
+.agent-bubble {
+    display: block;
+    color: var(--text-tertiary);
 }
 
 .preview-line {
     height: 12px;
+    margin-top: 28px;
     border-radius: var(--r-pill);
     background: var(--bg-3);
 }
 
 .preview-line.short {
     width: 62%;
-}
-
-.chat-bubble {
-    max-width: 210px;
-    border-radius: 16px;
-    padding: 10px 12px;
-    color: var(--text-secondary);
-    font-size: 13px;
-    line-height: 20px;
-}
-
-.chat-bubble + .chat-bubble {
     margin-top: 12px;
 }
 
-.chat-bubble.ai {
+.agent-bubble {
     border: 1px solid var(--bg-3);
     background: var(--bg-2);
 }
 
-.chat-bubble.user {
-    margin-left: auto;
-    background: var(--bg-3);
+.section {
+    padding: 88px 0;
 }
 
-.preview-fade {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: 110px;
-    background: linear-gradient(to top, #000, transparent);
-    pointer-events: none;
-}
-
-.marketing-section,
-.marketing-cta,
-.marketing-footer {
-    width: min(1040px, calc(100% - 48px));
-    margin: 0 auto;
-}
-
-.marketing-section {
-    padding: 96px 0;
-}
-
-.section-kicker {
-    margin: 0 0 12px;
-    color: var(--accent-gold);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-}
-
-.marketing-section h2,
-.marketing-cta h2 {
-    max-width: 720px;
-    margin: 0 0 32px;
-    font-family: var(--font-heading);
+.section h2 {
+    max-width: 740px;
+    margin: 12px 0 32px;
     font-size: clamp(30px, 4vw, 48px);
-    font-weight: 700;
+    line-height: 1.08;
     letter-spacing: -0.03em;
-    line-height: 1.04;
 }
 
-.feature-grid {
+.feature-grid,
+.stack-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 1px;
-    overflow: hidden;
-    border: 1px solid var(--bg-2);
+    gap: 16px;
+}
+
+.stack-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.feature-card,
+.stack-card,
+.workflow-card {
+    border: 1px solid var(--bg-3);
     border-radius: var(--r-card);
-    background: var(--bg-2);
-}
-
-.feature-card {
-    min-height: 250px;
     background: var(--bg-1);
-    padding: 32px 28px;
-    transition: background-color 150ms ease;
+    padding: 24px;
 }
 
-.feature-card:hover {
-    background: var(--bg-2);
-}
-
-.feature-icon {
-    display: inline-grid;
-    width: 42px;
-    height: 42px;
-    place-items: center;
-    border: 1px solid var(--bg-4);
-    border-radius: var(--r-item);
-    background: var(--bg-3);
+.feature-card svg {
     color: var(--accent-gold);
 }
 
 .feature-card h3,
-.step-card h3,
-.stack-card h3 {
-    margin: 20px 0 8px;
-    font-size: 16px;
-    font-weight: 600;
-}
-
-.feature-card p,
-.step-card p,
-.stack-card p,
-.mcp-section p {
-    margin: 0;
-    color: var(--text-muted);
-    font-size: 14px;
-    font-weight: 300;
+.stack-card h3,
+.workflow-step h3 {
+    margin: 18px 0 8px;
+    font-size: 18px;
     line-height: 24px;
 }
 
-.how-it-works,
-.mcp-section {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.86fr);
-    gap: 48px;
-    align-items: center;
+.feature-card p,
+.stack-card p,
+.workflow-step p,
+.split-section > div > p {
+    margin: 0;
+    color: var(--text-tertiary);
 }
 
-.step-list {
+.split-section {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.9fr);
+    gap: 48px;
+    align-items: start;
+}
+
+.workflow-card {
     display: grid;
     gap: 16px;
 }
 
-.step-card {
+.workflow-step {
     display: flex;
     gap: 16px;
-    border-radius: var(--r-card);
-    padding: 12px;
-    transition: background-color 150ms ease;
 }
 
-.step-card:hover {
-    background: var(--bg-1);
-}
-
-.step-card span {
+.workflow-step > span {
     display: grid;
     width: 34px;
     height: 34px;
@@ -616,238 +399,70 @@ onUnmounted(() => revealObserver?.disconnect());
     place-items: center;
     border: 1px solid var(--bg-4);
     border-radius: var(--r-pill);
-    color: var(--text-muted);
-    transition: 150ms ease;
-}
-
-.step-card:hover span {
-    border-color: var(--accent-gold);
     color: var(--accent-gold);
-}
-
-.step-card h3 {
-    margin-top: 2px;
-}
-
-.conversation-panel {
-    border: 1px solid var(--bg-3);
-    border-radius: var(--r-card);
-    background: var(--bg-1);
-    padding: 24px;
-}
-
-.message {
-    max-width: 78%;
-    border-radius: 16px;
-    padding: 12px 14px;
-    color: var(--text-secondary);
-    font-size: 14px;
-    font-weight: 300;
-}
-
-.message + .message {
-    margin-top: 12px;
-}
-
-.message.ai {
-    border: 1px solid var(--bg-3);
-    background: var(--bg-2);
-}
-
-.message.user {
-    margin-left: auto;
-    background: var(--bg-3);
-}
-
-.stack-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 16px;
-}
-
-.stack-card {
-    min-height: 190px;
-    border: 1px solid var(--bg-3);
-    border-radius: var(--r-card);
-    background: var(--bg-1);
-    padding: 24px;
-}
-
-.stack-badge {
-    display: inline-flex;
-    border-radius: var(--r-pill);
-    padding: 4px 10px;
-    font-size: 12px;
     font-weight: 700;
 }
 
-.stack-badge.rust {
-    background: rgb(230 126 34 / 0.16);
-    color: #e67e22;
+.workflow-step h3 {
+    margin-top: 2px;
 }
 
-.stack-badge.python {
-    background: rgb(52 152 219 / 0.16);
-    color: #6bb7f0;
-}
-
-.stack-badge.nuxt {
-    background: rgb(0 220 130 / 0.16);
-    color: #00dc82;
-}
-
-.stack-badge.storage {
-    background: rgb(39 174 96 / 0.16);
-    color: var(--success);
-}
-
-.mcp-section p {
-    max-width: 560px;
-    margin-bottom: 28px;
-    font-size: 16px;
-    line-height: 28px;
-}
-
-.mcp-diagram {
-    position: relative;
-    min-height: 320px;
-    border: 1px solid var(--bg-3);
-    border-radius: var(--r-card);
-    background:
-        radial-gradient(circle at 70% 30%, rgb(15 102 245 / 0.12), transparent 12rem),
-        var(--bg-1);
-}
-
-.diagram-node {
-    position: absolute;
-    z-index: 1;
-    border: 1px solid var(--bg-4);
+.stack-card strong {
+    display: inline-flex;
     border-radius: var(--r-pill);
-    background: var(--bg-2);
-    padding: 10px 16px;
-    color: var(--text-secondary);
-    font-size: 14px;
-}
-
-.diagram-node.browser {
-    top: 46px;
-    left: 32px;
-}
-
-.diagram-node.core {
-    top: 132px;
-    left: 50%;
+    background: var(--bg-3);
     color: var(--accent-gold);
-    transform: translateX(-50%);
+    padding: 4px 10px;
+    font-size: 12px;
 }
 
-.diagram-node.mcp {
-    right: 32px;
-    bottom: 52px;
-}
-
-.diagram-line {
-    position: absolute;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--accent-gold), transparent);
-    transform-origin: left center;
-}
-
-.diagram-line.one {
-    top: 100px;
-    left: 116px;
-    width: 220px;
-    transform: rotate(18deg);
-}
-
-.diagram-line.two {
-    right: 104px;
-    bottom: 112px;
-    width: 220px;
-    transform: rotate(-24deg);
-}
-
-.marketing-cta {
-    display: grid;
-    justify-items: center;
-    padding: 120px 24px;
-    text-align: center;
-}
-
-.marketing-cta h2 {
-    margin-bottom: 0;
-}
-
-.marketing-footer {
+.landing-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 24px;
-    border-top: 1px solid var(--bg-2);
-    padding: 32px 0 48px;
+    border-top: 1px solid var(--bg-3);
+    padding: 28px 0 40px;
     color: var(--text-muted);
-    font-size: 14px;
 }
 
-.rv {
-    opacity: 0;
-    transform: translateY(18px);
-}
-
-.rv.vis {
-    animation: fade-up 520ms var(--ease-out) both;
-}
-
-@media (max-width: 900px) {
-    .marketing-nav__inner {
+@media (max-width: 960px) {
+    .landing-nav {
         grid-template-columns: 1fr auto;
     }
 
-    .marketing-nav__links {
+    .landing-links {
         display: none;
     }
 
-    .preview-shell {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
-    .preview-sidebar,
-    .preview-agent {
-        display: none;
-    }
-
+    .product-preview,
     .feature-grid,
-    .how-it-works,
     .stack-grid,
-    .mcp-section {
+    .split-section {
         grid-template-columns: 1fr;
     }
 
-    .stack-grid {
-        gap: 12px;
+    .preview-notes,
+    .preview-agent {
+        display: none;
     }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 640px) {
+    .landing-nav,
+    .section,
+    .landing-footer,
     .hero {
-        padding-top: 104px;
-    }
-
-    .hero-actions,
-    .marketing-footer {
-        align-items: stretch;
-        flex-direction: column;
-    }
-
-    .hero-actions .btn,
-    .marketing-cta .btn {
-        width: 100%;
-    }
-
-    .marketing-section,
-    .marketing-cta,
-    .marketing-footer {
         width: min(100% - 32px, 1040px);
+    }
+
+    .hero {
+        padding-top: 64px;
+    }
+
+    .landing-footer {
+        align-items: flex-start;
+        flex-direction: column;
     }
 }
 </style>

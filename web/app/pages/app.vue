@@ -5,12 +5,14 @@
                 <button class="icon-btn mobile-only" type="button" aria-label="Open notes" @click="openPanel('notes')">
                     <UiAppIcon name="menu" :size="18" />
                 </button>
+                <strong>Notalking</strong>
+                <span class="breadcrumb-separator" aria-hidden="true">/</span>
                 <span>{{ resolvedNoteTitle || "No note selected" }}</span>
             </div>
 
             <button class="search-trigger" type="button" title="Search (Ctrl or Cmd+K)" @click="searchOpen = true">
                 <UiAppIcon name="search" :size="16" />
-                <span>Search notes -- ⌘K</span>
+                <span>Search Notalking</span>
             </button>
 
             <div class="topbar-actions">
@@ -122,15 +124,15 @@
 
             <aside :class="['agent-shell', { 'is-collapsed': agentCollapsed, 'is-open': activeOverlay === 'agent' }]">
                 <div class="panel-rail agent-rail" aria-hidden="false">
-                    <button class="icon-btn" type="button" aria-label="Toggle agent" @click="toggleAgentPanel">
+                    <button class="icon-btn" type="button" aria-label="Toggle assistant" @click="toggleAgentPanel">
                         <UiAppIcon name="panelRight" :size="18" />
                     </button>
-                    <button class="icon-btn" type="button" aria-label="Agent unavailable" @click="openPanel('agent')">
+                    <button class="icon-btn" type="button" aria-label="Assistant unavailable" @click="openPanel('agent')">
                         <UiAppIcon name="agent" :size="18" />
                     </button>
                 </div>
                 <div class="panel-content agent-content">
-                    <button class="icon-btn mobile-only agent-close" type="button" aria-label="Close agent" @click="activeOverlay = null">
+                    <button class="icon-btn mobile-only agent-close" type="button" aria-label="Close assistant" @click="activeOverlay = null">
                         <UiAppIcon name="close" :size="18" />
                     </button>
                     <AgentPanel :offline="true" />
@@ -154,6 +156,8 @@ import { getCoreErrorMessage } from "~/utils/coreErrors";
 
 const api = useCoreApi();
 const sessionStore = useSessionStore();
+const NOTES_COLLAPSED_KEY = "notalking:dashboard-notes-collapsed:v2";
+const AGENT_COLLAPSED_KEY = "notalking:dashboard-agent-collapsed:v2";
 
 const sessionReady = ref(false);
 const loadError = ref("");
@@ -199,13 +203,13 @@ const resolvedNoteTitle = computed(
 
 watch(notesCollapsed, (value) => {
     if (import.meta.client) {
-        localStorage.setItem("notalking:notes-collapsed", value ? "1" : "0");
+        localStorage.setItem(NOTES_COLLAPSED_KEY, value ? "1" : "0");
     }
 });
 
 watch(agentCollapsed, (value) => {
     if (import.meta.client) {
-        localStorage.setItem("notalking:agent-collapsed", value ? "1" : "0");
+        localStorage.setItem(AGENT_COLLAPSED_KEY, value ? "1" : "0");
     }
 });
 
@@ -214,9 +218,9 @@ function viewportDefaults() {
         return;
     }
     isCompact.value = window.matchMedia("(max-width: 1023px)").matches;
-    const notesStored = localStorage.getItem("notalking:notes-collapsed");
-    const agentStored = localStorage.getItem("notalking:agent-collapsed");
-    notesCollapsed.value = notesStored == null ? isCompact.value : notesStored === "1";
+    const notesStored = localStorage.getItem(NOTES_COLLAPSED_KEY);
+    const agentStored = localStorage.getItem(AGENT_COLLAPSED_KEY);
+    notesCollapsed.value = notesStored === "1" && !isCompact.value;
     agentCollapsed.value = agentStored == null ? window.matchMedia("(max-width: 1279px)").matches : agentStored === "1";
 }
 
@@ -348,7 +352,7 @@ async function logout() {
     try {
         await api.logout();
     } catch {
-        // The local session state should clear even if Core is already unreachable.
+        // Local session state still clears when Core is already unreachable.
     }
     sessionStore.clear();
     settingsOpen.value = false;
@@ -387,20 +391,25 @@ onUnmounted(() => {
 <style scoped>
 .app-shell {
     display: grid;
-    grid-template-rows: 32px minmax(0, 1fr);
+    grid-template-rows: 40px minmax(0, 1fr);
     height: 100vh;
     overflow: hidden;
-    background: var(--bg-base);
+    background:
+        radial-gradient(circle at 50% -12rem, rgb(61 157 149 / 0.13), transparent 34rem),
+        var(--bg-base);
     color: var(--text-primary);
 }
 
 .topbar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 240px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 360px) minmax(0, 1fr);
     align-items: center;
-    border-bottom: 1px solid var(--bg-3);
-    background: var(--bg-1);
-    padding: 0 8px;
+    height: 50px;
+    border-bottom: 1px solid color-mix(in srgb, var(--bg-3) 50%, transparent);
+    background: rgb(23 22 20 / 0.92);
+    padding: 0 12px;
+    gap: 12px;
+    backdrop-filter: blur(16px);
 }
 
 .topbar-breadcrumb,
@@ -413,29 +422,49 @@ onUnmounted(() => {
 
 .topbar-breadcrumb span {
     overflow: hidden;
-    color: var(--text-secondary);
-    font-size: 14px;
+    color: var(--text-tertiary);
+    font-size: 13px;
+    line-height: 24px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
+.topbar-breadcrumb strong {
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 24px;
+}
+
+.breadcrumb-separator {
+    color: var(--text-disabled) !important;
+}
+
 .search-trigger {
     display: inline-flex;
-    width: 200px;
-    height: 24px;
+    width: min(340px, 100%);
+    height: 36px;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 8px;
-    border: 0;
-    border-radius: var(--r-pill);
+    border: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
+    border-radius: 8px;
     background: var(--bg-3);
     color: var(--text-muted);
+    padding: 0 12px;
     font-size: 14px;
+    line-height: 24px;
     cursor: pointer;
     justify-self: center;
+    transition:
+        background-color 150ms ease,
+        border-color 150ms ease,
+        color 150ms ease;
 }
 
 .search-trigger:hover {
+    background: color-mix(in srgb, var(--bg-3) 120%, var(--bg-2));
+    border-color: color-mix(in srgb, var(--accent-primary) 25%, var(--bg-3));
     color: var(--text-primary);
 }
 
@@ -445,13 +474,12 @@ onUnmounted(() => {
 
 .user-avatar {
     display: grid;
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     place-items: center;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-gold), #f3e4bd);
-    color: #000;
-    font-family: var(--font-heading);
+    background: linear-gradient(135deg, var(--accent-primary), #8bf2ea);
+    color: #061817;
     font-size: 12px;
     font-weight: 700;
 }
@@ -460,6 +488,8 @@ onUnmounted(() => {
     display: grid;
     min-height: 0;
     grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 10px;
 }
 
 .notes-panel,
@@ -467,33 +497,35 @@ onUnmounted(() => {
     position: relative;
     display: grid;
     min-height: 0;
-    grid-template-columns: 0 minmax(0, 1fr);
-    border-color: var(--bg-3);
-    background: var(--bg-1);
+    grid-template-columns: minmax(0, 1fr);
+    border: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
+    border-radius: 12px;
+    background: #1b1a18;
+    overflow: hidden;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.015);
     transition: width 250ms var(--ease-out);
 }
 
 .notes-panel {
-    width: 240px;
-    border-right: 1px solid var(--bg-3);
+    width: 252px;
 }
 
 .agent-shell {
-    width: 300px;
-    border-left: 1px solid var(--bg-3);
+    width: 324px;
 }
 
 .notes-panel.is-collapsed,
 .agent-shell.is-collapsed {
-    width: 40px;
-    grid-template-columns: 40px 0;
+    width: 42px;
+    grid-template-columns: 42px 0;
 }
 
 .panel-rail {
     display: none;
     min-height: 0;
-    border-right: 1px solid var(--bg-3);
-    padding: 4px;
+    border-right: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
+    padding: 6px;
+    background: #191816;
 }
 
 .agent-rail {
@@ -516,7 +548,7 @@ onUnmounted(() => {
 .notes-content {
     display: grid;
     grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-    padding: 14px 12px;
+    padding: 12px 10px;
 }
 
 .panel-heading {
@@ -524,15 +556,16 @@ onUnmounted(() => {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 12px;
+    min-height: 32px;
+    margin-bottom: 8px;
 }
 
 .panel-heading span {
-    color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    color: var(--text-secondary);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 24px;
 }
 
 .panel-heading div {
@@ -542,7 +575,7 @@ onUnmounted(() => {
 
 .panel-search {
     display: flex;
-    height: 36px;
+    height: 32px;
     align-items: center;
     gap: 8px;
     border-radius: var(--r-item);
@@ -558,6 +591,7 @@ onUnmounted(() => {
     background: transparent;
     color: var(--text-primary);
     font-size: 14px;
+    line-height: 24px;
     outline: none;
 }
 
@@ -580,7 +614,7 @@ onUnmounted(() => {
 .note-list {
     min-height: 0;
     overflow-y: auto;
-    margin-top: 12px;
+    margin-top: 10px;
     padding-right: 2px;
 }
 
@@ -594,13 +628,17 @@ onUnmounted(() => {
 
 .note-row:hover,
 .note-row.is-active {
-    background: var(--bg-3);
+    background: #25231f;
+}
+
+.note-row.is-active button:first-child {
+    color: var(--accent-primary);
 }
 
 .note-row button:first-child {
     display: grid;
     width: 100%;
-    min-height: 40px;
+    min-height: 38px;
     grid-template-columns: 16px minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px;
@@ -608,7 +646,7 @@ onUnmounted(() => {
     border-radius: var(--r-item);
     background: transparent;
     color: var(--text-muted);
-    padding: 6px 10px;
+    padding: 6px 8px;
     text-align: left;
     cursor: pointer;
 }
@@ -621,13 +659,15 @@ onUnmounted(() => {
     overflow: hidden;
     color: var(--text-secondary);
     font-size: 14px;
+    line-height: 24px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .note-row time {
     color: var(--text-disabled);
-    font-size: 10px;
+    font-size: 11px;
+    line-height: 16px;
 }
 
 .note-trash {
@@ -666,7 +706,7 @@ onUnmounted(() => {
     border: 1px solid var(--bg-3);
     border-radius: 50%;
     background: var(--bg-2);
-    color: var(--accent-gold);
+    color: var(--accent-primary);
 }
 
 .notes-empty p,
@@ -703,7 +743,11 @@ onUnmounted(() => {
     min-width: 0;
     min-height: 0;
     overflow-y: auto;
-    background: var(--bg-base);
+    border: 1px solid color-mix(in srgb, var(--bg-3) 70%, transparent);
+    border-radius: 18px;
+    background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.015), transparent 140px),
+        var(--bg-base);
 }
 
 .editor-state {
@@ -713,7 +757,6 @@ onUnmounted(() => {
 
 .editor-state h1 {
     margin: 16px 0 0;
-    font-family: var(--font-heading);
     font-size: 28px;
 }
 
@@ -721,7 +764,7 @@ onUnmounted(() => {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--accent-gold);
+    background: var(--accent-primary);
     animation: breathe 900ms ease-in-out infinite;
 }
 
@@ -738,7 +781,7 @@ onUnmounted(() => {
 
 .panel-scrim {
     position: fixed;
-    inset: 32px 0 0;
+    inset: 40px 0 0;
     z-index: 30;
     background: rgb(0 0 0 / 0.45);
     backdrop-filter: blur(3px);
@@ -771,11 +814,12 @@ onUnmounted(() => {
     .notes-panel.is-collapsed,
     .agent-shell.is-collapsed {
         position: fixed;
-        top: 32px;
+        top: 40px;
         bottom: 0;
         z-index: 40;
         width: min(320px, calc(100vw - 24px));
         grid-template-columns: minmax(0, 1fr);
+        border-radius: 0 16px 16px 0;
         transition: transform 250ms var(--ease-out);
     }
 
@@ -786,6 +830,7 @@ onUnmounted(() => {
 
     .agent-shell {
         right: 0;
+        border-radius: 16px 0 0 16px;
         transform: translateX(105%);
     }
 

@@ -32,8 +32,8 @@
                     <section v-if="activeSection === 'providers'" class="settings-pane">
                         <div class="pane-heading">
                             <div>
-                                <p class="pane-kicker">LLM Providers</p>
-                                <h3>Provider configuration</h3>
+                                <p class="pane-kicker">Intelligence</p>
+                                <h3>Assistant providers</h3>
                             </div>
                             <span class="offline-pill">
                                 <span class="status-dot is-offline" />
@@ -66,7 +66,7 @@
                     <section v-else-if="activeSection === 'sessions'" class="settings-pane sessions-pane">
                         <div class="pane-heading">
                             <div>
-                                <p class="pane-kicker">Sessions</p>
+                                <p class="pane-kicker">Core sessions</p>
                                 <h3>Active devices</h3>
                             </div>
                             <div class="revoke-wrap">
@@ -167,7 +167,7 @@ const revokingOthers = ref(false);
 const othersMessage = ref("");
 
 const sections = [
-    { id: "providers", label: "LLM Providers", icon: "agent" },
+    { id: "providers", label: "Assistant", icon: "agent" },
     { id: "sessions", label: "Sessions", icon: "shield" },
     { id: "account", label: "Account", icon: "user" },
 ] as const;
@@ -226,10 +226,11 @@ async function onRevokeOthers() {
 .settings-modal {
     position: relative;
     display: grid;
-    grid-template-columns: 200px minmax(0, 1fr);
-    width: min(720px, 100%);
-    height: min(540px, calc(100vh - 48px));
+    grid-template-columns: 190px minmax(0, 1fr);
+    width: min(750px, 100%);
+    height: min(560px, calc(100vh - 50px));
     overflow: hidden;
+    border-radius: 12px;
 }
 
 .close-button {
@@ -240,14 +241,13 @@ async function onRevokeOthers() {
 }
 
 .settings-nav {
-    border-right: 1px solid var(--bg-3);
+    border-right: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
     background: var(--bg-1);
     padding: 24px 12px;
 }
 
 .settings-nav h2 {
     margin: 0 8px 20px;
-    font-family: var(--font-heading);
     font-size: 20px;
     letter-spacing: -0.02em;
 }
@@ -267,15 +267,15 @@ async function onRevokeOthers() {
 .settings-pane {
     height: 100%;
     overflow-y: auto;
-    padding: 32px;
+    padding: 28px 32px;
 }
 
 .pane-heading {
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 24px;
+    gap: 20px;
+    margin-bottom: 28px;
 }
 
 .pane-kicker {
@@ -289,7 +289,6 @@ async function onRevokeOthers() {
 
 .pane-heading h3 {
     margin: 0;
-    font-family: var(--font-heading);
     font-size: 24px;
     letter-spacing: -0.02em;
 }
@@ -299,7 +298,7 @@ async function onRevokeOthers() {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    border-radius: var(--r-pill);
+    border-radius: 20px;
     background: var(--bg-3);
     color: var(--text-muted);
     padding: 5px 10px;
@@ -309,11 +308,11 @@ async function onRevokeOthers() {
 .offline-callout {
     display: flex;
     gap: 12px;
-    border: 1px solid var(--bg-4);
+    border: 1px solid color-mix(in srgb, var(--bg-4) 70%, transparent);
     border-radius: var(--r-card);
-    background: var(--bg-3);
+    background: color-mix(in srgb, var(--warning) 8%, var(--bg-3));
     padding: 16px;
-    color: var(--warning);
+    color: var(--text-secondary);
 }
 
 .offline-callout strong {
@@ -410,14 +409,6 @@ async function onRevokeOthers() {
     font-size: 13px;
 }
 
-.success-chip {
-    border-radius: var(--r-input);
-    background: rgb(39 174 96 / 0.12);
-    color: var(--success);
-    padding: 10px 12px;
-    font-size: 14px;
-}
-
 .sessions-list {
     display: grid;
     gap: 10px;
@@ -451,7 +442,7 @@ async function onRevokeOthers() {
 }
 
 .this-device {
-    background: rgb(39 174 96 / 0.12);
+    background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
     color: var(--success);
 }
 
@@ -490,9 +481,8 @@ async function onRevokeOthers() {
     height: 48px;
     place-items: center;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--accent-gold), #f3e4bd);
-    color: #000;
-    font-family: var(--font-heading);
+    background: linear-gradient(135deg, var(--accent-primary), #8bf2ea);
+    color: #061817;
     font-weight: 700;
 }
 

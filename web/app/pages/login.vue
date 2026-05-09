@@ -2,7 +2,7 @@
     <main class="auth-page">
         <div class="auth-glow" aria-hidden="true" />
         <div class="auth-wrap">
-            <UiAppLogo class="auth-logo" font-size="20px" />
+            <UiAppLogo class="auth-logo" />
             <section
                 class="auth-card surface-card"
                 :class="{ 'is-shaking': shaking }"
@@ -10,7 +10,7 @@
             >
                 <div class="auth-heading">
                     <h1 id="login-title">Welcome back</h1>
-                    <p>Sign in to your notes</p>
+                    <p>Sign in to your Notalking workspace.</p>
                 </div>
 
                 <form class="auth-form" @submit.prevent="doLogin">
@@ -109,23 +109,16 @@ function triggerShake() {
 }
 
 .auth-glow {
-    position: absolute;
-    inset: auto auto 44% 50%;
-    width: 480px;
-    height: 480px;
-    border-radius: 50%;
-    background: rgb(201 169 110 / 0.05);
-    filter: blur(42px);
-    transform: translateX(-50%);
+    display: none;
 }
 
 .auth-wrap {
     position: relative;
     z-index: 1;
     display: grid;
-    width: min(400px, 100%);
+    width: min(390px, 100%);
     justify-items: center;
-    gap: 24px;
+    gap: 22px;
 }
 
 .auth-logo {
@@ -134,7 +127,13 @@ function triggerShake() {
 
 .auth-card {
     width: 100%;
+    border-color: var(--bg-3);
+    border-radius: var(--r-card);
+    background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent),
+        var(--bg-2);
     padding: 32px;
+    box-shadow: var(--shadow-soft);
 }
 
 .auth-card.is-shaking {
@@ -147,30 +146,32 @@ function triggerShake() {
 
 .auth-heading h1 {
     margin: 0;
+    color: var(--text-primary);
     font-family: var(--font-heading);
-    font-size: 24px;
+    font-size: 32px;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.04em;
+    line-height: 40px;
 }
 
 .auth-heading p,
 .auth-switch {
     margin: 8px 0 0;
-    color: var(--text-muted);
-    font-size: 14px;
+    color: var(--text-tertiary);
+    font-size: 16px;
     line-height: 24px;
 }
 
 .auth-form {
     display: grid;
-    gap: 16px;
+    gap: 14px;
     margin-top: 24px;
 }
 
 .forgot-link {
     justify-self: end;
-    color: var(--accent-primary);
-    font-size: 12px;
+    color: var(--text-secondary);
+    font-size: 14px;
     line-height: 24px;
     text-decoration: none;
 }
@@ -182,6 +183,7 @@ function triggerShake() {
 
 .auth-submit {
     width: 100%;
+    margin-top: 2px;
 }
 
 .auth-switch {
@@ -189,18 +191,18 @@ function triggerShake() {
 }
 
 .auth-switch a {
-    color: var(--accent-primary);
+    color: var(--text-primary);
     font-weight: 600;
     text-decoration: none;
 }
 
 @media (max-width: 480px) {
     .auth-page {
-        padding-inline: 24px;
+        padding-inline: 16px;
     }
 
     .auth-card {
-        padding: 24px;
+        padding: 22px;
     }
 }
 </style>
