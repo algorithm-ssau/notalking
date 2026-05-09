@@ -11,12 +11,12 @@
             >
             <div class="settings-scrim" aria-hidden="true" @click="emit('close')" />
             <section class="modal-surface settings-modal" @click.stop>
+                <button class="icon-btn close-button" type="button" aria-label="Close settings" @click="emit('close')">
+                    <UiAppIcon name="close" :size="20" />
+                </button>
                 <aside class="settings-nav" aria-label="Settings sections">
                     <div class="nav-header">
                         <h2 id="settings-title">Settings</h2>
-                        <button class="icon-btn close-button" type="button" aria-label="Close settings" @click="emit('close')">
-                            <UiAppIcon name="close" :size="18" />
-                        </button>
                     </div>
                     <button
                         v-for="section in sections"
@@ -237,7 +237,10 @@ async function onRevokeOthers() {
 }
 
 .close-button {
-    position: static;
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    z-index: 2;
 }
 
 .nav-header {
@@ -275,7 +278,7 @@ async function onRevokeOthers() {
 .settings-pane {
     height: 100%;
     overflow-y: auto;
-    padding: 28px 32px;
+    padding: 44px 32px 28px;
 }
 
 .pane-heading {
@@ -551,7 +554,7 @@ async function onRevokeOthers() {
     }
 
     .settings-pane {
-        padding: 24px;
+        padding: 44px 24px 24px;
     }
 
     .pane-heading,

@@ -546,7 +546,7 @@ onUnmounted(() => {
 .notes-content {
     display: grid;
     grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-    padding: 12px 10px;
+    padding: 12px;
 }
 
 .panel-heading {
