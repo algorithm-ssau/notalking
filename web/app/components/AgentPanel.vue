@@ -56,7 +56,7 @@ const { offline = true } = defineProps<{
     display: grid;
     grid-template-rows: auto auto minmax(0, 1fr) auto;
     height: 100%;
-    background: #1b1a18;
+    background: transparent;
 }
 
 .agent-header {
@@ -65,7 +65,7 @@ const { offline = true } = defineProps<{
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    border-bottom: 1px solid var(--bg-3);
+    border-bottom: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
     padding: 6px 10px 6px 14px;
 }
 
@@ -85,8 +85,8 @@ const { offline = true } = defineProps<{
     align-items: center;
     gap: 6px;
     border: 0;
-    border-radius: var(--r-pill);
-    background: #25231f;
+    border-radius: var(--r-item);
+    background: var(--bg-2);
     color: var(--text-muted);
     padding: 0 10px;
     font-size: 12px;
@@ -97,9 +97,9 @@ const { offline = true } = defineProps<{
     display: flex;
     align-items: center;
     gap: 8px;
-    border-bottom: 1px solid var(--bg-4);
-    background: #22201d;
-    color: var(--text-tertiary);
+    border-bottom: 1px solid color-mix(in srgb, var(--bg-4) 70%, transparent);
+    background: color-mix(in srgb, var(--warning) 8%, var(--bg-2));
+    color: var(--text-secondary);
     padding: 8px 12px;
     font-size: 13px;
     line-height: 20px;
@@ -125,9 +125,9 @@ const { offline = true } = defineProps<{
     width: 48px;
     height: 48px;
     place-items: center;
-    border: 1px solid var(--bg-3);
+    border: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
     border-radius: 50%;
-    background: #22201d;
+    background: var(--bg-2);
     color: var(--accent-primary);
 }
 
@@ -163,13 +163,13 @@ const { offline = true } = defineProps<{
 }
 
 .agent-message.ai {
-    border: 1px solid var(--bg-3);
-    background: #22201d;
+    border: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
+    background: var(--bg-2);
 }
 
 .agent-message.user {
     margin-left: auto;
-    background: #2b2925;
+    background: color-mix(in srgb, var(--bg-3) 80%, var(--bg-4));
 }
 
 .stream-cursor {
@@ -185,7 +185,7 @@ const { offline = true } = defineProps<{
 .agent-input-wrap {
     position: relative;
     min-height: 64px;
-    border-top: 1px solid var(--bg-3);
+    border-top: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
     padding: 10px 12px;
 }
 
@@ -197,7 +197,7 @@ const { offline = true } = defineProps<{
 .agent-input {
     min-height: 44px;
     padding-right: 48px;
-    background: #22201d;
+    background: var(--bg-2);
 }
 
 .send-button {
@@ -209,7 +209,7 @@ const { offline = true } = defineProps<{
     height: 32px;
     place-items: center;
     border: 0;
-    border-radius: 50%;
+    border-radius: 8px;
     background: var(--accent-primary);
     color: #071514;
     cursor: pointer;

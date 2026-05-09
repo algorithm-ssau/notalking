@@ -107,7 +107,7 @@
                     Loading workspace...
                 </div>
                 <div v-else-if="!resolvedNoteId" class="editor-state">
-                    <UiAppIcon name="pen" :size="20" />
+                    <div><UiAppIcon name="pen" :size="24" /></div>
                     <h1>No note selected</h1>
                     <p>Create a note to start writing.</p>
                     <button class="btn btn-primary" type="button" @click="createNote">New note</button>
@@ -404,7 +404,7 @@ onUnmounted(() => {
     align-items: center;
     height: 50px;
     border-bottom: 1px solid color-mix(in srgb, var(--bg-3) 50%, transparent);
-    background: rgb(23 22 20 / 0.92);
+    background: rgb(15 15 15 / 0.92);
     padding: 0 12px;
     gap: 12px;
     backdrop-filter: blur(16px);
@@ -514,8 +514,8 @@ onUnmounted(() => {
 
 .notes-panel.is-collapsed,
 .agent-shell.is-collapsed {
-    width: 42px;
-    grid-template-columns: 42px 0;
+    width: 48px;
+    grid-template-columns: 48px 0;
 }
 
 .panel-rail {
@@ -528,7 +528,7 @@ onUnmounted(() => {
 
 .agent-rail {
     border-right: 0;
-    border-left: 1px solid var(--bg-3);
+    border-left: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
 }
 
 .is-collapsed > .panel-rail {
@@ -696,12 +696,12 @@ onUnmounted(() => {
 }
 
 .notes-empty div,
-.editor-state > svg {
+.editor-state > div:first-child {
     display: grid;
     width: 56px;
     height: 56px;
     place-items: center;
-    border: 1px solid var(--bg-3);
+    border: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
     border-radius: 50%;
     background: var(--bg-2);
     color: var(--accent-primary);
