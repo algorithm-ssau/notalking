@@ -62,7 +62,8 @@ Key environment variables (CLI flags override env per SPEC §8 — see `notalkin
 | POST | `/providers` | Create provider -- kinds: **`ollama`**, **`github_models`** (alias **`github_copilot`**) |
 | PATCH | `/providers/{id}` | Update provider |
 | DELETE | `/providers/{id}` | Delete provider |
-| POST | `/chat/completions/stream` | SSE chat; default provider uses **Ollama** (`INTELLIGENCE_OLLAMA_*`); or pass `provider_id`; optional `super_prompt` is injected as a hidden system instruction; CoreBridge calls emit `tool` events |
+| POST | `/chat/completions/stream` | SSE chat; default provider uses **Ollama** (`INTELLIGENCE_OLLAMA_*`); or pass `provider_id`; optional `super_prompt` is injected as a hidden system instruction; CoreBridge calls emit `tool` events and explicit note-write requests return preview actions |
+| POST | `/chat/note-actions/apply` | Apply a previously previewed note create / append / replace / rename action |
 | POST | `/chat/cancel/{stream_id}` | Cancel in-flight generation |
 | POST | `/v2t/transcribe/stream` | SSE stub transcription |
 
@@ -70,9 +71,9 @@ Key environment variables (CLI flags override env per SPEC §8 — see `notalkin
 
 When **`INTELLIGENCE_CORE_GRPC_URL`** points at Core's **`CORE_GRPC_BIND`** listener, chat requests search and read the authenticated user's Core notes before calling the provider. The context is bounded and injected as a system message so the model can answer from note titles, excerpts, block text, note ids, and block ids. CoreBridge search always has a lexical title/block fallback; if Core embeddings are configured, semantic hits can enrich the same results.
 
-While the request is running, `/chat/completions/stream` emits SSE `tool` events for CoreBridge/MCP-equivalent calls: `search_notes`, `get_note_content`, and `create_note`. Events include `phase` (`start`, `done`, `error`), the CoreBridge method, the nearest MCP method name, note ids/titles when available, search hit counts, a structured `request`, a structured `minimal_response`, and error messages. Web uses these events to show which notes were read before provider tokens arrive and to expose hover details for each call.
+While the request is running, `/chat/completions/stream` emits SSE `tool` events for CoreBridge/MCP-equivalent calls: `search_notes`, `get_note_content`, `create_note`, and `update_note`. Events include `phase` (`start`, `done`, `error`), the CoreBridge method, the nearest MCP method name, note ids/titles when available, search hit counts, a structured `request`, a structured `minimal_response`, and error messages. Web uses these events to show which notes were read before provider tokens arrive and to expose hover details for each call.
 
-The same bridge executes explicit create-note requests such as "create a note titled ..." or "save it as a note". Creation returns an SSE action event so the Web app refreshes the note list and selects the new note. Existing-note edits remain draft-only through chat until a dedicated edit contract is added.
+Explicit note-writing requests now stop at a preview boundary first. `/chat/completions/stream` emits an SSE `action` event with `action: "note_write_preview"` when the user asks to create or modify a note. The browser shows the proposed title/body diff and only calls `/chat/note-actions/apply` after the user confirms. The apply route then uses CoreBridge `CreateNote` or `UpdateNote`, refreshes note metadata, and triggers the same embedding update path as direct Core writes.
 
 The Web Settings modal can store an Agent **super prompt**. It is sent as `super_prompt` on every chat request and injected before provider streaming as a hidden system message. It is user-controlled prompt text, not a server-side secret.
 

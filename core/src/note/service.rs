@@ -6,8 +6,8 @@ use editor::content::Content;
 use uuid::Uuid;
 
 use crate::note::{
-    CreateNoteInput, DeleteNoteInput, Note, NoteError, NoteUsecase, TextPatch,
-    blocks::LoadedNoteBlocks,
+    CreateNoteInput, DeleteNoteInput, Note, NoteBodyUpdate, NoteError, NoteUsecase, TextPatch,
+    UpdateNoteInput, blocks::LoadedNoteBlocks,
 };
 
 use super::block_repo::BlockRepository;
@@ -93,6 +93,50 @@ where
 
     async fn list_notes(&self, user_id: Uuid) -> Result<Vec<Note>, NoteError> {
         self.repo.list_by_user(user_id).await
+    }
+
+    async fn update_note(&self, input: UpdateNoteInput) -> Result<Note, NoteError> {
+        let mut note = self.ensure_note_owner(input.user_id, input.note_id).await?;
+
+        if input.title.is_none() && input.body.is_none() {
+            return Err(NoteError::InvalidInput);
+        }
+
+        if let Some(title) = input.title {
+            let normalized = title.trim().to_owned();
+            if normalized.is_empty() {
+                return Err(NoteError::InvalidInput);
+            }
+            note.title = normalized;
+        }
+
+        if let Some(body) = input.body {
+            let now = Utc::now();
+            let text = match body {
+                NoteBodyUpdate::ReplacePlainText { text } => text,
+                NoteBodyUpdate::AppendPlainText { text } => {
+                    let current = self.load_blocks(input.note_id).await?.plain_text();
+                    if current.trim().is_empty() {
+                        text
+                    } else if text.trim().is_empty() {
+                        current
+                    } else {
+                        format!("{current}\n\n{text}")
+                    }
+                }
+            };
+            let loaded = LoadedNoteBlocks::single_text_block(&text, now);
+            note.head_id = loaded.head_id;
+            note.updated_at = now;
+            let raw = loaded.into_raw()?;
+            self.blocks.save_document(note.id, &raw).await?;
+            self.repo.update(note.clone()).await?;
+            return Ok(note);
+        }
+
+        note.updated_at = Utc::now();
+        self.repo.update(note.clone()).await?;
+        Ok(note)
     }
 
     async fn delete_note(&self, input: DeleteNoteInput) -> Result<(), NoteError> {

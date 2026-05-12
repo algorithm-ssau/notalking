@@ -15,7 +15,10 @@ use crate::auth::{
     AuthError, AuthUsecase, CloseOtherSessionsInput, ListSessionsInput, LoginInput, LogoutInput,
     ManagedSessionView, RegisterInput, SessionView,
 };
-use crate::note::{CreateNoteInput, DeleteNoteInput, NoteError, NoteUsecase, TextPatch};
+use crate::note::{
+    CreateNoteInput, DeleteNoteInput, NoteBodyUpdate, NoteError, NoteUsecase, TextPatch,
+    UpdateNoteInput,
+};
 use editor::content::Content;
 use editor::text::Style;
 
@@ -74,6 +77,11 @@ pub struct CreateNoteRequest {
     pub title: String,
     #[serde(default)]
     pub body: String,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateNoteRequest {
+    pub title: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -647,6 +655,42 @@ pub async fn list_notes_handler(
         total_pages,
     })
     .into_response();
+    merge_session_refresh(body, refresh, state.config.cookie_secure)
+}
+
+pub async fn update_note_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(note_id): Path<String>,
+    Json(payload): Json<UpdateNoteRequest>,
+) -> Result<Response, ApiError> {
+    let session_id = session_id_from_cookie(&headers)?;
+    let (auth, refresh) = state
+        .auth
+        .authorize_session(session_id)
+        .await
+        .map_err(map_auth_error)?;
+    let note_id = Uuid::parse_str(&note_id).map_err(|_| ApiError {
+        status: StatusCode::BAD_REQUEST,
+        code: "invalid_note_id",
+        message: "invalid note id".to_owned(),
+        details: None,
+    })?;
+
+    let note = state
+        .note
+        .update_note(UpdateNoteInput {
+            user_id: auth.user_id,
+            note_id,
+            title: payload.title,
+            body: None::<NoteBodyUpdate>,
+        })
+        .await
+        .map_err(map_note_error)?;
+
+    state.notify_embedding(auth.user_id, note.id);
+
+    let body = Json(into_note_response(note)).into_response();
     merge_session_refresh(body, refresh, state.config.cookie_secure)
 }
 

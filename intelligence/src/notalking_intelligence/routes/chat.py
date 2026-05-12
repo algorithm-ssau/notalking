@@ -51,6 +51,10 @@ CORE_TOOL_METHODS = {
         "method": "CoreBridge.CreateNote",
         "mcp_method": "create_note",
     },
+    "update_note": {
+        "method": "CoreBridge.UpdateNote",
+        "mcp_method": "update_note",
+    },
 }
 
 
@@ -67,10 +71,37 @@ class ChatStreamRequest(BaseModel):
 
 
 @dataclass(frozen=True)
-class CreateNoteAction:
-    title: str
-    initial_text: str
+class NoteWriteIntent:
+    kind: Literal["create", "append", "replace", "rename"]
     source: str
+    body: str = ""
+    next_title: str | None = None
+    target_mode: Literal["current", "title"] | None = None
+    target_query: str | None = None
+
+
+class NoteWritePreview(BaseModel):
+    kind: Literal["create", "append", "replace", "rename"]
+    source: str
+    message: str
+    target_note_id: str | None = None
+    current_title: str | None = None
+    next_title: str
+    current_body: str | None = None
+    next_body: str | None = None
+
+
+class NoteActionApplyRequest(BaseModel):
+    preview: NoteWritePreview
+
+
+class NoteActionApplyResponse(BaseModel):
+    action: Literal["note_write_applied"]
+    kind: Literal["create", "append", "replace", "rename"]
+    note_id: str
+    source: str
+    title: str
+    head_block_id: str | None = None
 
 
 def _resolve_default_ollama(settings: Any) -> tuple[str, str, dict[str, str] | None]:
@@ -229,7 +260,7 @@ def _split_title_body(value: str) -> tuple[str, str]:
     return _clean_note_title(text), ""
 
 
-def _detect_create_note_action(messages: list[dict[str, Any]]) -> CreateNoteAction | None:
+def _detect_create_note_action(messages: list[dict[str, Any]]) -> NoteWriteIntent | None:
     latest = _latest_user_text(messages)
     if not latest:
         return None
@@ -256,9 +287,10 @@ def _detect_create_note_action(messages: list[dict[str, Any]]) -> CreateNoteActi
                 body = body_match.group(1).strip()
             elif remainder.lower().startswith("about "):
                 body = remainder[6:].strip()
-            return CreateNoteAction(
-                title=_clean_note_title(title_match.group(1)),
-                initial_text=_trim(body, NOTE_CREATE_MAX_BODY_CHARS),
+            return NoteWriteIntent(
+                kind="create",
+                next_title=_clean_note_title(title_match.group(1)),
+                body=_trim(body, NOTE_CREATE_MAX_BODY_CHARS),
                 source="explicit",
             )
 
@@ -272,9 +304,10 @@ def _detect_create_note_action(messages: list[dict[str, Any]]) -> CreateNoteActi
             else:
                 title, body = _split_title_body(after_note)
             if title:
-                return CreateNoteAction(
-                    title=title,
-                    initial_text=_trim(body, NOTE_CREATE_MAX_BODY_CHARS),
+                return NoteWriteIntent(
+                    kind="create",
+                    next_title=title,
+                    body=_trim(body, NOTE_CREATE_MAX_BODY_CHARS),
                     source="explicit",
                 )
 
@@ -282,9 +315,10 @@ def _detect_create_note_action(messages: list[dict[str, Any]]) -> CreateNoteActi
         if about_match:
             title = _clean_note_title(about_match.group(1))
             if title:
-                return CreateNoteAction(
-                    title=title,
-                    initial_text=_trim(about_match.group(1).strip(), NOTE_CREATE_MAX_BODY_CHARS),
+                return NoteWriteIntent(
+                    kind="create",
+                    next_title=title,
+                    body=_trim(about_match.group(1).strip(), NOTE_CREATE_MAX_BODY_CHARS),
                     source="explicit",
                 )
 
@@ -294,127 +328,135 @@ def _detect_create_note_action(messages: list[dict[str, Any]]) -> CreateNoteActi
     ):
         previous = _previous_assistant_text(messages)
         if previous:
-            return CreateNoteAction(
-                title=_title_from_body(previous),
-                initial_text=_trim(previous, NOTE_CREATE_MAX_BODY_CHARS),
+            return NoteWriteIntent(
+                kind="create",
+                next_title=_title_from_body(previous),
+                body=_trim(previous, NOTE_CREATE_MAX_BODY_CHARS),
                 source="previous_assistant",
             )
 
     return None
 
 
-async def _stream_create_note_action(
-    *,
-    bridge: Any,
-    user_id: str,
-    action: CreateNoteAction | None,
-    results: list[dict[str, Any]],
-) -> AsyncIterator[dict[str, Any]]:
-    if action is None:
-        return
+def _normalize_title_for_match(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().strip("\"'`“”‘’")).lower()
 
-    call_id = uuid.uuid4().hex
-    request_payload = {
-        "title": action.title,
-        "initial_text_chars": len(action.initial_text),
-        "initial_text_preview": _trim(action.initial_text, 240) if action.initial_text else "",
-        "source": action.source,
-    }
-    if bridge is None:
-        message = "Could not create note because INTELLIGENCE_CORE_GRPC_URL is not configured."
-        results.append(
-            {
-                "type": "note_create_failed",
-                "message": message,
-                "title": action.title,
-            }
-        )
-        yield _tool_event(
-            "create_note",
-            "error",
-            call_id=call_id,
-            title=action.title,
-            message=message,
-            request=request_payload,
-            minimal_response={"ok": False, "error": message},
-            error=message,
-        )
-        return
 
-    yield _tool_event(
-        "create_note",
-        "start",
-        call_id=call_id,
-        title=action.title,
-        message=f'Creating Core note "{action.title}".',
-        request=request_payload,
-        minimal_response={"status": "running"},
+def _plain_text_from_note(note: Any) -> str:
+    return "\n\n".join(block.plain_text for block in note.blocks if block.plain_text).strip()
+
+
+def _explicit_note_target(text: str) -> str | None:
+    patterns = (
+        r"\bnote\s+(?:called|named|titled)\s+[\"'“”‘’`]?(.+?)[\"'“”‘’`]?(?:\s+(?:with|to|into|for)\b|[:\n]|$)",
+        r"\bnote\s+[\"'“”‘’`]?(.+?)[\"'“”‘’`]?(?:\s+(?:with|to|into|for)\b|[:\n]|$)",
     )
-
-    try:
-        created = await bridge.create_note(user_id, action.title, action.initial_text)
-    except Exception as e:
-        logger.warning("Core note creation from chat failed: %s", e)
-        message = f'Could not create note "{action.title}": {e}'
-        results.append(
-            {
-                "type": "note_create_failed",
-                "message": message,
-                "title": action.title,
-            }
-        )
-        yield _tool_event(
-            "create_note",
-            "error",
-            call_id=call_id,
-            title=action.title,
-            message=message,
-            request=request_payload,
-            minimal_response={"ok": False, "error": str(e)},
-            error=str(e),
-        )
-        return
-
-    results.append(
-        {
-            "type": "note_created",
-            "message": f'Created note "{created.title}".',
-            "note_id": created.note_id,
-            "title": created.title,
-            "head_block_id": created.head_block_id,
-            "source": action.source,
-        }
-    )
-    yield _tool_event(
-        "create_note",
-        "done",
-        call_id=call_id,
-        note_id=created.note_id,
-        title=created.title,
-        head_block_id=created.head_block_id,
-        message=f'Created Core note "{created.title}".',
-        request=request_payload,
-        minimal_response={
-            "ok": True,
-            "note_id": created.note_id,
-            "title": created.title,
-            "head_block_id": created.head_block_id or None,
-        },
-    )
+    for pattern in patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL)
+        if match:
+            title = _clean_note_title(match.group(1))
+            if title:
+                return title
+    return None
 
 
-def _format_action_context(action_results: list[dict[str, Any]]) -> str | None:
-    if not action_results:
+def _extract_note_write_intent(messages: list[dict[str, Any]], current_note_id: str | None) -> NoteWriteIntent | None:
+    latest = _latest_user_text(messages)
+    if not latest:
         return None
-    lines = ["NOTALKING CORE ACTION RESULTS"]
-    for result in action_results:
-        if result.get("type") == "note_created":
-            lines.append(
-                f"- Created note \"{result.get('title', '')}\" (note_id={result.get('note_id', '')}, head_block_id={result.get('head_block_id', '') or 'none'})."
+
+    lower = latest.lower()
+    previous = _previous_assistant_text(messages)
+    create = _detect_create_note_action(messages)
+    if create is not None:
+        return create
+
+    current_markers = ("current note", "this note", "open note")
+    target_mode: Literal["current", "title"] | None = None
+    target_query: str | None = None
+    if any(marker in lower for marker in current_markers):
+        target_mode = "current"
+    else:
+        explicit_target = _explicit_note_target(latest)
+        if explicit_target:
+            target_mode = "title"
+            target_query = explicit_target
+        elif current_note_id and "note" in lower:
+            target_mode = "current"
+
+    rename_match = re.search(
+        r"\b(?:rename|retitle|change the title of|update the title of)\b.+?\bnote\b.+?\b(?:to|as)\b\s+(.+)$",
+        latest,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if rename_match and target_mode:
+        next_title = _clean_note_title(rename_match.group(1))
+        if next_title:
+            return NoteWriteIntent(
+                kind="rename",
+                source="explicit",
+                next_title=next_title,
+                target_mode=target_mode,
+                target_query=target_query,
             )
-        elif result.get("type") == "note_create_failed":
-            lines.append(f"- Note creation failed: {result.get('message', 'unknown error')}")
-    return "\n".join(lines)
+
+    replace_match = re.search(
+        r"\b(?:replace|overwrite|rewrite)\b.+?\bnote\b.+?(?:with|using|to)\s*:?\s*(.+)$",
+        latest,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if replace_match and target_mode:
+        body = replace_match.group(1).strip() or previous
+        if body:
+            return NoteWriteIntent(
+                kind="replace",
+                source="explicit" if replace_match.group(1).strip() else "previous_assistant",
+                body=_trim(body, NOTE_CREATE_MAX_BODY_CHARS),
+                target_mode=target_mode,
+                target_query=target_query,
+            )
+
+    append_prefix_match = re.search(
+        r"\b(?:append|add|write)\s+to\s+(?:the\s+)?(?:current|this|open)\s+note\s*:?\s*(.+)$",
+        latest,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if append_prefix_match and current_note_id:
+        body = append_prefix_match.group(1).strip() or previous
+        if body:
+            return NoteWriteIntent(
+                kind="append",
+                source="explicit" if append_prefix_match.group(1).strip() else "previous_assistant",
+                body=_trim(body, NOTE_CREATE_MAX_BODY_CHARS),
+                target_mode="current",
+            )
+
+    append_suffix_match = re.search(
+        r"\b(?:append|add|write)\b\s+(.+?)\s+\b(?:to|into)\b.+?\bnote\b",
+        latest,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if append_suffix_match and target_mode:
+        body = append_suffix_match.group(1).strip() or previous
+        if body:
+            return NoteWriteIntent(
+                kind="append",
+                source="explicit" if append_suffix_match.group(1).strip() else "previous_assistant",
+                body=_trim(body, NOTE_CREATE_MAX_BODY_CHARS),
+                target_mode=target_mode,
+                target_query=target_query,
+            )
+
+    if previous and target_mode and re.search(r"\b(save|add|append|write)\s+(it|this)\s+(to|into)\b.+?\bnote\b", lower):
+        return NoteWriteIntent(
+            kind="append",
+            source="previous_assistant",
+            body=_trim(previous, NOTE_CREATE_MAX_BODY_CHARS),
+            target_mode=target_mode,
+            target_query=target_query,
+        )
+
+    return None
 
 
 def _format_note_blocks(note: Any, *, heading: str) -> str:
@@ -431,6 +473,279 @@ def _format_note_blocks(note: Any, *, heading: str) -> str:
     if non_empty == 0:
         lines.append("- no text blocks")
     return "\n".join(lines)
+
+
+async def _resolve_note_for_preview(
+    *,
+    bridge: Any,
+    user_id: str,
+    current_note_id: str | None,
+    intent: NoteWriteIntent,
+) -> tuple[Any | None, str | None, list[dict[str, Any]]]:
+    tool_events: list[dict[str, Any]] = []
+    errors: list[str] = []
+
+    if bridge is None:
+        return None, "INTELLIGENCE_CORE_GRPC_URL is not configured.", errors
+
+    if intent.target_mode == "current":
+        if not current_note_id:
+            return None, "There is no open note to edit.", errors
+        call_id = uuid.uuid4().hex
+        request_payload = {
+            "note_id": current_note_id,
+            "reason": "preview_target",
+            "max_blocks": 80,
+            "max_chars_per_block": 4_000,
+        }
+        tool_events.append(
+            _tool_event(
+                "get_note_content",
+                "start",
+                call_id=call_id,
+                note_id=current_note_id,
+                reason="preview_target",
+                message="Reading the current note for an edit preview.",
+                request=request_payload,
+                minimal_response={"status": "running"},
+            )
+        )
+        try:
+            note = await bridge.get_note_content(
+                user_id,
+                current_note_id,
+                max_blocks=80,
+                max_chars_per_block=4_000,
+            )
+        except Exception as exc:
+            tool_events.append(
+                _tool_event(
+                    "get_note_content",
+                    "error",
+                    call_id=call_id,
+                    note_id=current_note_id,
+                    reason="preview_target",
+                    message=f"Could not read the current note: {exc}",
+                    request=request_payload,
+                    minimal_response={"ok": False, "error": str(exc)},
+                    error=str(exc),
+                )
+            )
+            return None, f"Could not read the current note: {exc}", tool_events
+
+        tool_events.append(
+            _tool_event(
+                "get_note_content",
+                "done",
+                call_id=call_id,
+                note_id=note.note_id,
+                title=note.title,
+                reason="preview_target",
+                block_count=len(note.blocks),
+                message=f'Read "{note.title}" for the edit preview.',
+                request=request_payload,
+                minimal_response=_note_content_minimal_response(note),
+            )
+        )
+        return note, None, tool_events
+
+    query = intent.target_query or ""
+    call_id = uuid.uuid4().hex
+    request_payload = {"query": query, "limit": 5}
+    tool_events.append(
+        _tool_event(
+            "search_notes",
+            "start",
+            call_id=call_id,
+            query=query,
+            limit=5,
+            message=f'Searching notes for "{_trim(query, 120)}" to resolve the edit target.',
+            request=request_payload,
+            minimal_response={"status": "running"},
+        )
+    )
+    try:
+        hits = await bridge.search_notes(user_id, query, limit=5)
+    except Exception as exc:
+        tool_events.append(
+            _tool_event(
+                "search_notes",
+                "error",
+                call_id=call_id,
+                query=query,
+                limit=5,
+                message=f"Could not resolve the target note: {exc}",
+                request=request_payload,
+                minimal_response={"ok": False, "error": str(exc)},
+                error=str(exc),
+            )
+        )
+        return None, f"Could not resolve the target note: {exc}", tool_events
+
+    hit_payloads = [_note_hit_payload(hit) for hit in hits]
+    tool_events.append(
+        _tool_event(
+            "search_notes",
+            "done",
+            call_id=call_id,
+            query=query,
+            limit=5,
+            count=len(hits),
+            notes=hit_payloads,
+            message=f"Resolved {len(hits)} candidate note{'s' if len(hits) != 1 else ''} for the edit target.",
+            request=request_payload,
+            minimal_response={"count": len(hits), "hits": hit_payloads},
+        )
+    )
+    if not hits:
+        return None, f'No note matched "{query}".', tool_events
+
+    normalized_query = _normalize_title_for_match(query)
+    best = next(
+        (hit for hit in hits if _normalize_title_for_match(hit.title) == normalized_query),
+        hits[0],
+    )
+
+    read_call_id = uuid.uuid4().hex
+    read_payload = {
+        "note_id": best.note_id,
+        "title": best.title,
+        "reason": "preview_target",
+        "matched_by": best.matched_by,
+        "max_blocks": 80,
+        "max_chars_per_block": 4_000,
+    }
+    tool_events.append(
+        _tool_event(
+            "get_note_content",
+            "start",
+            call_id=read_call_id,
+            note_id=best.note_id,
+            title=best.title,
+            reason="preview_target",
+            matched_by=best.matched_by,
+            message=f'Reading "{best.title}" for the edit preview.',
+            request=read_payload,
+            minimal_response={"status": "running"},
+        )
+    )
+    try:
+        note = await bridge.get_note_content(
+            user_id,
+            best.note_id,
+            max_blocks=80,
+            max_chars_per_block=4_000,
+        )
+    except Exception as exc:
+        tool_events.append(
+            _tool_event(
+                "get_note_content",
+                "error",
+                call_id=read_call_id,
+                note_id=best.note_id,
+                title=best.title,
+                reason="preview_target",
+                matched_by=best.matched_by,
+                message=f'Could not read "{best.title}": {exc}',
+                request=read_payload,
+                minimal_response={"ok": False, "error": str(exc)},
+                error=str(exc),
+            )
+        )
+        return None, f'Could not read "{best.title}": {exc}', tool_events
+
+    tool_events.append(
+        _tool_event(
+            "get_note_content",
+            "done",
+            call_id=read_call_id,
+            note_id=note.note_id,
+            title=note.title,
+            reason="preview_target",
+            matched_by=best.matched_by,
+            block_count=len(note.blocks),
+            message=f'Read "{note.title}" for the edit preview.',
+            request=read_payload,
+            minimal_response=_note_content_minimal_response(note),
+        )
+    )
+    return note, None, tool_events
+
+
+async def _build_note_write_preview(
+    *,
+    bridge: Any,
+    user_id: str,
+    current_note_id: str | None,
+    intent: NoteWriteIntent | None,
+) -> tuple[NoteWritePreview | None, list[dict[str, Any]]]:
+    if intent is None:
+        return None, []
+
+    if intent.kind == "create":
+        title = intent.next_title or "Agent note"
+        return (
+            NoteWritePreview(
+                kind="create",
+                source=intent.source,
+                message=f'Prepared a new note draft "{title}". Review it before applying.',
+                next_title=title,
+                next_body=intent.body,
+            ),
+            [],
+        )
+
+    target_note, error, tool_events = await _resolve_note_for_preview(
+        bridge=bridge,
+        user_id=user_id,
+        current_note_id=current_note_id,
+        intent=intent,
+    )
+    if target_note is None:
+        if error:
+            preview = NoteWritePreview(
+                kind=intent.kind,
+                source=intent.source,
+                message=error,
+                next_title=intent.next_title or "Untitled note",
+                next_body=intent.body or None,
+            )
+            return preview, tool_events
+        return None, tool_events
+
+    current_body = _plain_text_from_note(target_note)
+    if intent.kind == "rename":
+        next_title = intent.next_title or target_note.title
+        message = f'Ready to rename "{target_note.title}" to "{next_title}". Confirm to apply it.'
+        preview = NoteWritePreview(
+            kind="rename",
+            source=intent.source,
+            message=message,
+            target_note_id=target_note.note_id,
+            current_title=target_note.title,
+            next_title=next_title,
+            current_body=current_body,
+        )
+        return preview, tool_events
+
+    next_body = intent.body
+    if intent.kind == "append":
+        next_body = f"{current_body}\n\n{intent.body}".strip() if current_body else intent.body
+        message = f'Ready to append content to "{target_note.title}". Confirm to apply the note draft.'
+    else:
+        message = f'Ready to replace "{target_note.title}" with a rewritten draft. Confirm to apply it.'
+
+    preview = NoteWritePreview(
+        kind=intent.kind,
+        source=intent.source,
+        message=message,
+        target_note_id=target_note.note_id,
+        current_title=target_note.title,
+        next_title=target_note.title,
+        current_body=current_body,
+        next_body=next_body,
+    )
+    return preview, tool_events
 
 
 async def _stream_core_note_context(
@@ -686,7 +1001,7 @@ async def _stream_core_note_context(
 
     sections = [
         "NOTALKING CORE NOTE CONTEXT",
-        "Use the authenticated user's Core notes below when they are relevant. Cite note titles naturally when answering from notes. If the notes do not contain the answer, say what is missing instead of inventing it. This chat path can create new notes when explicitly asked, and can reference note/block ids, but it does not edit existing notes by itself.",
+        "Use the authenticated user's Core notes below when they are relevant. Cite note titles naturally when answering from notes. If the notes do not contain the answer, say what is missing instead of inventing it. This chat path can preview note creation or existing-note edits when explicitly asked, and can reference note/block ids.",
     ]
 
     if search_hits:
@@ -771,7 +1086,7 @@ async def chat_completions_stream(
     messages: list[dict[str, Any]] = [m.model_dump() for m in body.messages]
 
     latest_user_text = _latest_user_text(messages)
-    create_note_action = _detect_create_note_action(messages)
+    note_write_intent = _extract_note_write_intent(messages, body.note_id)
     super_prompt = _format_super_prompt(body.super_prompt)
 
     stream_id, cancel_event = registry.register()
@@ -779,22 +1094,26 @@ async def chat_completions_stream(
     async def event_stream():
         yield _sse({"type": "start", "stream_id": str(stream_id)})
         try:
-            action_results: list[dict[str, Any]] = []
-            async for tool_event in _stream_create_note_action(
+            preview, preview_tool_events = await _build_note_write_preview(
                 bridge=bridge,
                 user_id=str(identity.user_id),
-                action=create_note_action,
-                results=action_results,
-            ):
+                current_note_id=body.note_id,
+                intent=note_write_intent,
+            )
+            for tool_event in preview_tool_events:
                 yield _sse(tool_event)
 
-            for result in action_results:
-                action_event = {
-                    "type": "action",
-                    "action": result.get("type"),
-                    **{k: v for k, v in result.items() if k != "type"},
-                }
-                yield _sse(action_event)
+            if preview is not None:
+                yield _sse(
+                    {
+                        "type": "action",
+                        "action": "note_write_preview",
+                        "preview": preview.model_dump(),
+                        "message": preview.message,
+                    }
+                )
+                yield _sse({"type": "done"})
+                return
 
             note_context_out: dict[str, str | None] = {}
             async for tool_event in _stream_core_note_context(
@@ -807,14 +1126,11 @@ async def chat_completions_stream(
                 yield _sse(tool_event)
 
             system_messages: list[dict[str, Any]] = []
-            action_context = _format_action_context(action_results)
             note_context = note_context_out.get("value")
             if super_prompt:
                 system_messages.append({"role": "system", "content": super_prompt})
             if note_context:
                 system_messages.append({"role": "system", "content": note_context})
-            if action_context:
-                system_messages.append({"role": "system", "content": action_context})
             provider_messages = system_messages + messages
 
             async for token in stream_chat_completion(
@@ -825,7 +1141,7 @@ async def chat_completions_stream(
                 extra_headers=extra_headers,
             ):
                 yield _sse({"type": "token", "text": token})
-            yield _sse({"type": "done"})
+            yield _sse({"type": "done", "interrupted": cancel_event.is_set()})
         except httpx.HTTPStatusError as e:
             detail = (e.response.text or str(e))[:800]
             yield _sse({"type": "error", "status": e.response.status_code, "message": detail})
@@ -839,6 +1155,80 @@ async def chat_completions_stream(
 
     resp = StreamingResponse(event_stream(), media_type="text/event-stream")
     return attach_core_cookies(resp, request)
+
+
+@router.post("/note-actions/apply")
+async def apply_note_action(
+    request: Request,
+    identity: IdentityDep,
+    body: NoteActionApplyRequest,
+):
+    bridge = getattr(request.app.state, "core_bridge", None)
+    if bridge is None:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "core_bridge_unavailable", "message": "INTELLIGENCE_CORE_GRPC_URL is not configured"},
+        )
+
+    preview = body.preview
+    try:
+        if preview.kind == "create":
+            created = await bridge.create_note(
+                str(identity.user_id),
+                preview.next_title,
+                preview.next_body or "",
+            )
+            response = NoteActionApplyResponse(
+                action="note_write_applied",
+                kind="create",
+                note_id=created.note_id,
+                source=preview.source,
+                title=created.title,
+                head_block_id=created.head_block_id or None,
+            )
+        elif preview.kind == "rename":
+            if not preview.target_note_id:
+                raise HTTPException(status_code=422, detail={"code": "missing_note_id", "message": "target note is missing"})
+            updated = await bridge.update_note(
+                str(identity.user_id),
+                preview.target_note_id,
+                mode="rename",
+                title=preview.next_title,
+            )
+            response = NoteActionApplyResponse(
+                action="note_write_applied",
+                kind="rename",
+                note_id=updated.note_id,
+                source=preview.source,
+                title=updated.title,
+                head_block_id=updated.head_block_id or None,
+            )
+        else:
+            if not preview.target_note_id:
+                raise HTTPException(status_code=422, detail={"code": "missing_note_id", "message": "target note is missing"})
+            updated = await bridge.update_note(
+                str(identity.user_id),
+                preview.target_note_id,
+                mode=preview.kind,
+                body=preview.next_body or "",
+            )
+            response = NoteActionApplyResponse(
+                action="note_write_applied",
+                kind=preview.kind,
+                note_id=updated.note_id,
+                source=preview.source,
+                title=updated.title,
+                head_block_id=updated.head_block_id or None,
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "note_apply_failed", "message": str(exc)},
+        ) from exc
+
+    return json_response(response.model_dump(), request)
 
 
 @router.post("/cancel/{stream_id}")

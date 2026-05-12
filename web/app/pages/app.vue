@@ -118,7 +118,9 @@
                     :note-id="resolvedNoteId"
                     :note-title="resolvedNoteTitle"
                     :focus-block-id="focusBlockId"
+                    :reload-nonce="editorReloadNonce"
                     @focus-block-done="focusBlockId = null"
+                    @note-updated="onEditorNoteUpdated"
                 />
             </section>
 
@@ -138,7 +140,7 @@
                     <AgentPanel
                         :offline="intelligenceOffline"
                         :note-id="resolvedNoteId || undefined"
-                        @note-created="onAgentNoteCreated"
+                        @note-mutated="onAgentNoteMutated"
                     />
                 </div>
             </aside>
@@ -181,6 +183,7 @@ const noteFilter = ref("");
 const searchOpen = ref(false);
 const settingsOpen = ref(false);
 const focusBlockId = ref<string | null>(null);
+const editorReloadNonce = ref(0);
 const notesCollapsed = ref(false);
 const agentCollapsed = ref(false);
 const activeOverlay = ref<"notes" | "agent" | null>(null);
@@ -338,10 +341,19 @@ async function createNote() {
     }
 }
 
-async function onAgentNoteCreated(payload: { noteId: string; title: string }) {
+function onEditorNoteUpdated(note: NoteResponse) {
+    notes.value = notes.value.map((item) => item.id === note.id ? note : item);
+}
+
+async function onAgentNoteMutated(payload: { noteId: string; title: string; kind: string }) {
     notesPage.value = 1;
     await refreshNotes(1);
-    selectedNoteId.value = payload.noteId;
+    if (payload.kind === "create") {
+        selectedNoteId.value = payload.noteId;
+    }
+    if (resolvedNoteId.value === payload.noteId || payload.kind === "create") {
+        editorReloadNonce.value += 1;
+    }
     if (isCompact.value) {
         activeOverlay.value = null;
     }

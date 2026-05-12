@@ -65,6 +65,8 @@ export function useIntelApi() {
     return {
         streamIntelChat: (body: IntelChatRequest, onEvent: (ev: IntelStreamEvent) => void) =>
             streamIntelChatFromBase(baseUrl.value, body, onEvent),
+        cancelIntelChat: (streamId: string) => cancelIntelChatFromBase(baseUrl.value, streamId),
+        applyIntelNoteAction: (preview: IntelNoteWritePreview) => applyIntelNoteActionFromBase(baseUrl.value, preview),
         fetchIntelProviderCatalog: () => fetchIntelProviderCatalogFromBase(baseUrl.value),
         fetchIntelProviders: () => fetchIntelProvidersFromBase(baseUrl.value),
         createIntelProvider: (body: IntelProviderCreate) => createIntelProviderFromBase(baseUrl.value, body),
@@ -173,19 +175,40 @@ export type IntelToolEvent = {
     minimal_response?: IntelToolPayload;
 };
 
+export type IntelNoteWritePreview = {
+    kind: "create" | "append" | "replace" | "rename";
+    source: string;
+    message: string;
+    target_note_id?: string | null;
+    current_title?: string | null;
+    next_title: string;
+    current_body?: string | null;
+    next_body?: string | null;
+};
+
+export type IntelNoteActionApplyResponse = {
+    action: "note_write_applied";
+    kind: "create" | "append" | "replace" | "rename";
+    note_id: string;
+    source: string;
+    title: string;
+    head_block_id?: string | null;
+};
+
 export type IntelStreamEvent =
     | { type: "start"; stream_id?: string }
     | IntelToolEvent
     | {
         type: "action";
-        action?: "note_created" | "note_create_failed" | string;
+        action?: "note_write_preview" | "note_write_applied" | string;
         message?: string;
         note_id?: string;
         title?: string;
         head_block_id?: string;
+        preview?: IntelNoteWritePreview;
       }
     | { type: "token"; text: string }
-    | { type: "done" }
+    | { type: "done"; interrupted?: boolean }
     | { type: "error"; message?: string; status?: number };
 
 function parseSseBlocks(buffer: string): { events: IntelStreamEvent[]; rest: string } {
@@ -278,6 +301,32 @@ async function streamIntelChatFromBase(
             onEvent(ev);
         }
     }
+}
+
+async function cancelIntelChatFromBase(baseUrl: string, streamId: string): Promise<void> {
+    const res = await fetch(`${normalizeBaseUrl(baseUrl)}/chat/cancel/${encodeURIComponent(streamId)}`, {
+        method: "POST",
+        credentials: "include",
+    });
+    if (!res.ok) {
+        throw new Error(`Could not stop response (${res.status}): ${await readIntelError(res)}`);
+    }
+}
+
+async function applyIntelNoteActionFromBase(
+    baseUrl: string,
+    preview: IntelNoteWritePreview,
+): Promise<IntelNoteActionApplyResponse> {
+    const res = await fetch(`${normalizeBaseUrl(baseUrl)}/chat/note-actions/apply`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preview }),
+    });
+    if (!res.ok) {
+        throw new Error(`Could not apply note change (${res.status}): ${await readIntelError(res)}`);
+    }
+    return (await res.json()) as IntelNoteActionApplyResponse;
 }
 
 async function readIntelError(res: Response): Promise<string> {

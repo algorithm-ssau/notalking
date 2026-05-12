@@ -77,7 +77,7 @@
                     <section v-if="turn.toolCalls.length" class="tool-trace" aria-label="MCP calls">
                         <div class="tool-trace__header">
                             <span>MCP calls</span>
-                            <small>{{ pendingToolCount(turn) ? `${pendingToolCount(turn)} running` : "Complete" }}</small>
+                            <small>{{ pendingToolCount(turn) ? `${pendingToolCount(turn)} running` : 'Complete' }}</small>
                         </div>
                         <div class="tool-trace__list">
                             <article
@@ -94,9 +94,84 @@
                         </div>
                     </section>
 
-                    <div v-if="turn.assistantText || turn.pending" class="agent-message ai">
-                        {{ turn.assistantText }}
+                    <section v-if="turn.usedNotes.length" class="used-notes" aria-label="Used notes">
+                        <div class="tool-trace__header used-notes__header">
+                            <span>Used notes</span>
+                            <small>{{ turn.usedNotes.length }}</small>
+                        </div>
+                        <div class="used-notes__list">
+                            <article v-for="note in turn.usedNotes" :key="note.key" class="used-note-card">
+                                <strong>{{ note.title }}</strong>
+                                <span>{{ note.reason }}</span>
+                            </article>
+                        </div>
+                    </section>
+
+                    <section
+                        v-if="turn.notePreview && turn.notePreviewState !== 'dismissed'"
+                        class="note-preview"
+                        aria-label="Note write preview"
+                    >
+                        <div class="note-preview__header">
+                            <div>
+                                <span class="note-preview__eyebrow">Draft review</span>
+                                <h3>{{ notePreviewHeading(turn.notePreview) }}</h3>
+                            </div>
+                            <span :class="['note-preview__pill', `is-${turn.notePreviewState}`]">
+                                {{ notePreviewStateLabel(turn.notePreviewState) }}
+                            </span>
+                        </div>
+
+                        <p class="note-preview__message">{{ turn.notePreview.message }}</p>
+
+                        <div class="note-preview__grid">
+                            <article v-if="turn.notePreview.current_title" class="note-preview__card">
+                                <small>Current title</small>
+                                <strong>{{ turn.notePreview.current_title }}</strong>
+                            </article>
+                            <article class="note-preview__card">
+                                <small>Next title</small>
+                                <strong>{{ turn.notePreview.next_title }}</strong>
+                            </article>
+                            <article v-if="turn.notePreview.current_body" class="note-preview__card note-preview__body-card">
+                                <small>Current body</small>
+                                <pre>{{ previewSnippet(turn.notePreview.current_body) }}</pre>
+                            </article>
+                            <article v-if="turn.notePreview.next_body" class="note-preview__card note-preview__body-card">
+                                <small>Draft body</small>
+                                <pre>{{ previewSnippet(turn.notePreview.next_body) }}</pre>
+                            </article>
+                        </div>
+
+                        <p v-if="turn.notePreviewError" class="error-chip note-preview__feedback">{{ turn.notePreviewError }}</p>
+                        <p v-else-if="turn.notePreviewState === 'applied'" class="success-chip note-preview__feedback">
+                            Applied to {{ turn.notePreview.next_title }}.
+                        </p>
+
+                        <div v-if="turn.notePreviewState !== 'applied'" class="note-preview__actions">
+                            <button
+                                class="btn btn-secondary"
+                                type="button"
+                                :disabled="turn.notePreviewState === 'applying'"
+                                @click="dismissPreview(turn)"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                class="btn btn-primary"
+                                type="button"
+                                :disabled="turn.notePreviewState === 'applying'"
+                                @click="applyPreview(turn)"
+                            >
+                                {{ turn.notePreviewState === 'applying' ? 'Applying...' : 'Apply note change' }}
+                            </button>
+                        </div>
+                    </section>
+
+                    <div v-if="turn.assistantText || turn.pending || turn.interrupted" class="agent-message ai">
+                        {{ turn.assistantText || (turn.interrupted ? 'Response stopped.' : '') }}
                         <span v-if="turn.pending" class="stream-cursor" />
+                        <small v-if="turn.interrupted" class="interrupted-label">Interrupted</small>
                     </div>
                 </div>
             </template>
@@ -111,7 +186,23 @@
                 rows="2"
                 @keydown.enter.exact.prevent="send"
             />
-            <button class="send-button" type="button" :disabled="offline || busy" aria-label="Send message" @click="send">
+            <button
+                v-if="busy && activeStreamId"
+                class="stop-button"
+                type="button"
+                aria-label="Stop response"
+                @click="stop"
+            >
+                <UiAppIcon name="close" :size="15" />
+            </button>
+            <button
+                v-else
+                class="send-button"
+                type="button"
+                :disabled="offline || busy"
+                aria-label="Send message"
+                @click="send"
+            >
                 <UiAppIcon name="send" :size="16" />
             </button>
         </footer>
@@ -121,6 +212,7 @@
 <script setup lang="ts">
 import type {
     IntelChatMessage,
+    IntelNoteWritePreview,
     IntelProvider,
     IntelStreamEvent,
     IntelToolEvent,
@@ -139,11 +231,24 @@ type AgentToolCall = {
     phase: "start" | "done" | "error";
 };
 
+type AgentUsedNote = {
+    key: string;
+    noteId?: string;
+    title: string;
+    reason: string;
+};
+
 type AgentTurn = {
     userText: string;
     assistantText: string;
     pending: boolean;
+    interrupted: boolean;
+    streamId: string;
     toolCalls: AgentToolCall[];
+    usedNotes: AgentUsedNote[];
+    notePreview: IntelNoteWritePreview | null;
+    notePreviewState: "idle" | "applying" | "applied" | "dismissed";
+    notePreviewError: string;
 };
 
 const props = withDefaults(defineProps<{
@@ -155,7 +260,7 @@ const props = withDefaults(defineProps<{
 });
 
 const emit = defineEmits<{
-    noteCreated: [payload: { noteId: string; title: string }];
+    noteMutated: [payload: { noteId: string; title: string; kind: string }];
 }>();
 
 const intelApi = useIntelApi();
@@ -168,6 +273,7 @@ const selectedProviderId = ref("");
 const providerMenuOpen = ref(false);
 const providerMenuRef = ref<HTMLElement | null>(null);
 const threadRef = ref<HTMLElement | null>(null);
+const activeStreamId = ref("");
 
 const providerLabel = computed(() => {
     if (props.offline) {
@@ -352,6 +458,55 @@ function upsertToolCall(event: IntelToolEvent) {
     turn.toolCalls.push(payload);
 }
 
+function noteReason(event: IntelToolEvent, fallback = "Referenced during response"): string {
+    if (event.name === "search_notes") {
+        return "Found during note search";
+    }
+    if (event.name === "get_note_content") {
+        return "Opened for note context";
+    }
+    if (event.name === "update_note") {
+        return "Updated by the assistant";
+    }
+    if (event.name === "create_note") {
+        return "Created by the assistant";
+    }
+    return fallback;
+}
+
+function pushUsedNote(turn: AgentTurn, noteId: string | undefined, title: string | undefined, reason: string) {
+    const resolvedTitle = (title || "Untitled note").trim() || "Untitled note";
+    const key = noteId || resolvedTitle.toLowerCase();
+    const existing = turn.usedNotes.find((note) => note.key === key);
+    if (existing) {
+        existing.reason = reason;
+        existing.title = resolvedTitle;
+        existing.noteId = noteId;
+        return;
+    }
+    turn.usedNotes.push({
+        key,
+        noteId,
+        title: resolvedTitle,
+        reason,
+    });
+}
+
+function captureUsedNotes(event: IntelToolEvent) {
+    const turn = currentTurn();
+    if (!turn) {
+        return;
+    }
+    if (Array.isArray(event.notes)) {
+        for (const note of event.notes) {
+            pushUsedNote(turn, note.note_id, note.title, noteReason(event, "Found in a supporting note"));
+        }
+    }
+    if (event.note_id || event.title) {
+        pushUsedNote(turn, event.note_id, event.title, noteReason(event));
+    }
+}
+
 function pendingToolCount(turn: AgentTurn): number {
     return turn.toolCalls.filter((tool) => tool.phase === "start").length;
 }
@@ -366,11 +521,76 @@ function toolPhaseLabel(phase: AgentToolCall["phase"]): string {
     return "Running";
 }
 
+function notePreviewHeading(preview: IntelNoteWritePreview): string {
+    if (preview.kind === "create") {
+        return `Create “${preview.next_title}”`;
+    }
+    if (preview.kind === "rename") {
+        return `Rename “${preview.current_title || preview.next_title}”`;
+    }
+    if (preview.kind === "append") {
+        return `Append to “${preview.current_title || preview.next_title}”`;
+    }
+    return `Replace “${preview.current_title || preview.next_title}”`;
+}
+
+function notePreviewStateLabel(state: AgentTurn["notePreviewState"]): string {
+    if (state === "applying") {
+        return "Applying";
+    }
+    if (state === "applied") {
+        return "Applied";
+    }
+    return "Pending";
+}
+
+function previewSnippet(value: string): string {
+    const trimmed = value.trim();
+    if (trimmed.length <= 420) {
+        return trimmed;
+    }
+    return `${trimmed.slice(0, 417).trimEnd()}...`;
+}
+
+function dismissPreview(turn: AgentTurn) {
+    turn.notePreviewState = "dismissed";
+    turn.notePreviewError = "";
+}
+
+async function applyPreview(turn: AgentTurn) {
+    if (!turn.notePreview || turn.notePreviewState === "applying") {
+        return;
+    }
+    turn.notePreviewState = "applying";
+    turn.notePreviewError = "";
+    try {
+        const result = await intelApi.applyIntelNoteAction(turn.notePreview);
+        turn.notePreviewState = "applied";
+        turn.assistantText = `Applied ${result.kind} to “${result.title}”.`;
+        emit("noteMutated", {
+            noteId: result.note_id,
+            title: result.title,
+            kind: result.kind,
+        });
+    } catch (error: unknown) {
+        turn.notePreviewState = "idle";
+        turn.notePreviewError = error instanceof Error ? error.message : "Could not apply note change";
+    }
+}
+
 function applyStreamEvent(event: IntelStreamEvent) {
     const turn = currentTurn();
 
+    if (event.type === "start") {
+        activeStreamId.value = event.stream_id || "";
+        if (turn) {
+            turn.streamId = event.stream_id || "";
+        }
+        return;
+    }
     if (event.type === "tool") {
         upsertToolCall(event);
+        captureUsedNotes(event);
         return;
     }
     if (event.type === "token") {
@@ -383,21 +603,44 @@ function applyStreamEvent(event: IntelStreamEvent) {
     if (event.type === "done") {
         if (turn) {
             turn.pending = false;
+            turn.interrupted = event.interrupted === true;
         }
+        activeStreamId.value = "";
         return;
     }
     if (event.type === "error") {
         if (turn) {
             turn.pending = false;
         }
+        activeStreamId.value = "";
         streamError.value = event.message || "Assistant request failed";
         return;
     }
-    if (event.type === "action" && event.action === "note_created" && event.note_id) {
-        emit("noteCreated", {
-            noteId: event.note_id,
-            title: event.title || "Agent note",
-        });
+    if (event.type === "action" && event.action === "note_write_preview" && event.preview) {
+        if (!turn) {
+            return;
+        }
+        turn.notePreview = event.preview;
+        turn.assistantText = event.message || event.preview.message;
+        if (event.preview.target_note_id || event.preview.current_title) {
+            pushUsedNote(
+                turn,
+                event.preview.target_note_id || undefined,
+                event.preview.current_title || event.preview.next_title,
+                "Drafted for note writing",
+            );
+        }
+    }
+}
+
+async function stop() {
+    if (!activeStreamId.value) {
+        return;
+    }
+    try {
+        await intelApi.cancelIntelChat(activeStreamId.value);
+    } catch (error: unknown) {
+        streamError.value = error instanceof Error ? error.message : "Could not stop response";
     }
 }
 
@@ -413,10 +656,17 @@ async function send() {
         userText: text,
         assistantText: "",
         pending: true,
+        interrupted: false,
+        streamId: "",
         toolCalls: [],
+        usedNotes: [],
+        notePreview: null,
+        notePreviewState: "idle",
+        notePreviewError: "",
     });
     draft.value = "";
     busy.value = true;
+    activeStreamId.value = "";
     providerMenuOpen.value = false;
 
     try {
@@ -434,6 +684,7 @@ async function send() {
         if (turn) {
             turn.pending = false;
         }
+        activeStreamId.value = "";
         streamError.value = error instanceof Error ? error.message : "Assistant request failed";
     } finally {
         const turn = currentTurn();
@@ -567,7 +818,7 @@ async function send() {
     flex-direction: column;
     gap: 12px;
     overflow-y: auto;
-    padding: 16px 12px;
+    padding: 16px 12px 88px;
 }
 
 .agent-turn {
@@ -633,7 +884,9 @@ async function send() {
     background: color-mix(in srgb, var(--bg-3) 80%, var(--bg-4));
 }
 
-.tool-trace {
+.tool-trace,
+.used-notes,
+.note-preview {
     display: grid;
     gap: 8px;
     border: 1px solid color-mix(in srgb, var(--bg-4) 70%, transparent);
@@ -661,12 +914,16 @@ async function send() {
     text-transform: none;
 }
 
-.tool-trace__list {
+.tool-trace__list,
+.used-notes__list,
+.note-preview__grid {
     display: grid;
     gap: 8px;
 }
 
-.tool-row {
+.tool-row,
+.used-note-card,
+.note-preview__card {
     display: grid;
     gap: 4px;
     border-radius: 10px;
@@ -681,14 +938,20 @@ async function send() {
     gap: 12px;
 }
 
-.tool-row__meta strong {
+.tool-row__meta strong,
+.used-note-card strong,
+.note-preview__card strong {
     color: var(--text-primary);
     font-size: 13px;
     font-weight: 600;
     line-height: 18px;
 }
 
-.tool-row__meta span {
+.tool-row__meta span,
+.used-note-card span,
+.note-preview__card small,
+.note-preview__eyebrow,
+.note-preview__pill {
     color: var(--text-muted);
     font-size: 11px;
     font-weight: 600;
@@ -696,7 +959,8 @@ async function send() {
     text-transform: uppercase;
 }
 
-.tool-row p {
+.tool-row p,
+.note-preview__message {
     margin: 0;
     color: var(--text-secondary);
     font-size: 12px;
@@ -707,12 +971,54 @@ async function send() {
     color: var(--warning);
 }
 
-.tool-row.is-done .tool-row__meta span {
+.tool-row.is-done .tool-row__meta span,
+.note-preview__pill.is-applied {
     color: var(--success);
 }
 
 .tool-row.is-error .tool-row__meta span {
     color: var(--danger);
+}
+
+.used-note-card {
+    align-items: start;
+}
+
+.note-preview__header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.note-preview__header h3 {
+    margin: 2px 0 0;
+    color: var(--text-primary);
+    font-size: 15px;
+    line-height: 22px;
+}
+
+.note-preview__pill.is-applying {
+    color: var(--warning);
+}
+
+.note-preview__body-card pre {
+    margin: 0;
+    color: var(--text-secondary);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 12px;
+    line-height: 18px;
+    white-space: pre-wrap;
+}
+
+.note-preview__feedback {
+    margin: 0;
+}
+
+.note-preview__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
 }
 
 .stream-cursor {
@@ -725,8 +1031,20 @@ async function send() {
     animation: pulse 900ms ease-in-out infinite;
 }
 
+.interrupted-label {
+    display: inline-block;
+    margin-left: 8px;
+    color: var(--warning);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
 .agent-input-wrap {
-    position: relative;
+    position: sticky;
+    bottom: 0;
+    z-index: 1;
     min-height: 64px;
     border-top: 1px solid color-mix(in srgb, var(--bg-3) 60%, transparent);
     padding: 10px 12px;
@@ -744,7 +1062,8 @@ async function send() {
     background: var(--bg-2);
 }
 
-.send-button {
+.send-button,
+.stop-button {
     position: absolute;
     right: 22px;
     bottom: 20px;
@@ -754,36 +1073,32 @@ async function send() {
     place-items: center;
     border: 0;
     border-radius: 8px;
+    cursor: pointer;
+}
+
+.send-button {
     background: var(--accent-primary);
     color: #071514;
-    cursor: pointer;
+}
+
+.stop-button {
+    background: color-mix(in srgb, var(--danger) 24%, var(--bg-3));
+    color: var(--text-primary);
 }
 
 .send-button:disabled {
     cursor: not-allowed;
-}
-
-.provider-menu-enter-active,
-.provider-menu-leave-active {
-    transition:
-        opacity 150ms ease,
-        transform 150ms ease;
-}
-
-.provider-menu-enter-from,
-.provider-menu-leave-to {
-    opacity: 0;
-    transform: translateY(-4px);
+    opacity: 0.45;
 }
 
 @keyframes pulse {
     0%,
     100% {
-        opacity: 0.25;
+        opacity: 0.2;
     }
 
     50% {
-        opacity: 1;
+        opacity: 0.9;
     }
 }
 </style>

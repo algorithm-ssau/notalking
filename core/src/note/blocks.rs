@@ -45,6 +45,14 @@ impl LoadedNoteBlocks {
         }
     }
 
+    pub fn plain_text(&self) -> String {
+        self.ordered_blocks()
+            .into_iter()
+            .map(|block| block.content.to_plain_text())
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
+
     pub fn from_raw(raw: RawBlockDocument) -> Result<Self, NoteError> {
         let mut blocks = HashMap::with_capacity(raw.blocks.len());
         for (id, bytes) in raw.blocks {

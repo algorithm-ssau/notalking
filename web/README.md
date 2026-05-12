@@ -16,7 +16,7 @@ Quick start: install dependencies (`bun install`), then run `bun run dev`. Use `
 | `app/pages/app.vue` | Main three-column editor shell: note list, editor column, and offline Intelligence agent panel. |
 | `app/components/SemanticSearchDialog.vue` | Global `Cmd/Ctrl+K` search modal with recent notes, title matches, and semantic block matches when Core embeddings are configured. |
 | `app/components/SettingsModal.vue` | Global settings modal with LLM provider unavailable state, sessions management, and account sign-out. |
-| `app/components/AgentPanel.vue` | Agent panel visual state. Intelligence endpoints are not wired yet, so it renders the specified offline state. |
+| `app/components/AgentPanel.vue` | Live assistant surface with provider selection, tool tracing, used-note summaries, stop-generation control, and preview-then-apply note writing. |
 | `app/components/editor/*` | Existing block editor implementation, restyled for the DESIGN editor column. |
 | `app/components/ui/*` | Small shared logo and icon primitives used by pages and modals. |
 | `app/composables/useCoreApi.ts` | `$fetch` wrapper for Core APIs under `/core/...`. |
@@ -25,9 +25,9 @@ Quick start: install dependencies (`bun install`), then run `bun run dev`. Use `
 ## Editor notes
 
 - The editor remains block-based, not one giant document.
-- Text edits are debounced and serialized before patching Core.
-- Selection ranges use Unicode scalar positions to match Core's editor model.
-- Reordering uses Core's block move patch operations.
+- Text edits stay local per block and patch Core optimistically instead of reloading the full block list after each keystroke.
+- Selection ranges use Unicode scalar positions to match Core's editor model, including forward/backward rich-text selections for bold and italic.
+- Reordering uses Core's block move patch operations with local drag/drop insertion cues.
 - Intelligence is optional: when it is absent, only the agent/provider UI is disabled; notes and search continue through Core.
 
 ## Commands

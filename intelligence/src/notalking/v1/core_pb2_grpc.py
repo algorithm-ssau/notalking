@@ -60,6 +60,11 @@ class CoreBridgeStub(object):
                 request_serializer=notalking_dot_v1_dot_core__pb2.CreateNoteRequest.SerializeToString,
                 response_deserializer=notalking_dot_v1_dot_core__pb2.CreateNoteResponse.FromString,
                 _registered_method=True)
+        self.UpdateNote = channel.unary_unary(
+                '/notalking.v1.CoreBridge/UpdateNote',
+                request_serializer=notalking_dot_v1_dot_core__pb2.UpdateNoteRequest.SerializeToString,
+                response_deserializer=notalking_dot_v1_dot_core__pb2.UpdateNoteResponse.FromString,
+                _registered_method=True)
 
 
 class CoreBridgeServicer(object):
@@ -96,6 +101,12 @@ class CoreBridgeServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def UpdateNote(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_CoreBridgeServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -123,6 +134,11 @@ def add_CoreBridgeServicer_to_server(servicer, server):
                     servicer.CreateNote,
                     request_deserializer=notalking_dot_v1_dot_core__pb2.CreateNoteRequest.FromString,
                     response_serializer=notalking_dot_v1_dot_core__pb2.CreateNoteResponse.SerializeToString,
+            ),
+            'UpdateNote': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateNote,
+                    request_deserializer=notalking_dot_v1_dot_core__pb2.UpdateNoteRequest.FromString,
+                    response_serializer=notalking_dot_v1_dot_core__pb2.UpdateNoteResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -261,6 +277,33 @@ class CoreBridge(object):
             '/notalking.v1.CoreBridge/CreateNote',
             notalking_dot_v1_dot_core__pb2.CreateNoteRequest.SerializeToString,
             notalking_dot_v1_dot_core__pb2.CreateNoteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateNote(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/notalking.v1.CoreBridge/UpdateNote',
+            notalking_dot_v1_dot_core__pb2.UpdateNoteRequest.SerializeToString,
+            notalking_dot_v1_dot_core__pb2.UpdateNoteResponse.FromString,
             options,
             channel_credentials,
             insecure,

@@ -1,7 +1,20 @@
 <template>
     <article class="note-editor">
         <header class="editor-titlebar">
-            <h1>{{ noteTitle || "Untitled note" }}</h1>
+            <div class="editor-title-wrap">
+                <input
+                    v-model="titleDraft"
+                    class="editor-title-input"
+                    type="text"
+                    spellcheck="false"
+                    placeholder="Untitled note"
+                    @focus="isEditingTitle = true"
+                    @blur="commitTitle"
+                    @keydown.enter.prevent="commitTitle"
+                    @keydown.esc.prevent="resetTitleDraft"
+                >
+                <p v-if="titleError" class="title-error">{{ titleError }}</p>
+            </div>
             <button class="add-block" type="button" @click="addTextBlock">
                 <UiAppIcon name="plus" :size="16" />
                 Add block
@@ -24,13 +37,13 @@
             <div v-else class="block-list">
                 <template v-for="(block, index) in textBlocks" :key="block.id">
                     <div
-                        class="drop-slot"
+                        :class="['drop-slot', { 'is-active': dragActive && dropSlot === index }]"
                         @dragover.prevent="onDragOverSlot(index)"
                         @dragleave="onDragLeaveSlot(index)"
                         @drop.prevent="onDrop(index)"
                     >
                         <div class="drop-hitbox" />
-                        <div :class="['drop-line', { 'is-active': dragActive && dropSlot === index }]" />
+                        <div class="drop-line" />
                     </div>
 
                     <div :class="['block-row', { 'is-dragging': draggingId === block.id }]">
@@ -39,7 +52,8 @@
                                 :note-id="noteId"
                                 :block="block"
                                 :is-dragging="draggingId === block.id"
-                                @blocks-updated="onBlocksUpdated"
+                                :selection-restore="selectionRestore?.blockId === block.id ? selectionRestore : null"
+                                @block-updated="onBlockUpdated"
                                 @format-select="onFormatSelect(block.id, $event)"
                                 @format-clear="onFormatClear"
                                 @drag-start="onDragStart"
@@ -57,13 +71,13 @@
                 </template>
 
                 <div
-                    class="drop-slot"
+                    :class="['drop-slot', { 'is-active': dragActive && dropSlot === textBlocks.length }]"
                     @dragover.prevent="onDragOverSlot(textBlocks.length)"
                     @dragleave="onDragLeaveSlot(textBlocks.length)"
                     @drop.prevent="onDrop(textBlocks.length)"
                 >
                     <div class="drop-hitbox" />
-                    <div :class="['drop-line', { 'is-active': dragActive && dropSlot === textBlocks.length }]" />
+                    <div class="drop-line" />
                 </div>
             </div>
         </div>
@@ -80,8 +94,14 @@
 </template>
 
 <script setup lang="ts">
+import type { NoteResponse } from "~/types/core";
 import type { NoteBlock } from "~/types/editor";
-import { getTextContent, scalarLen } from "~/types/editor";
+import {
+    getTextContent,
+    replaceBlockChunks,
+    scalarLen,
+    setFormattingOnChunks,
+} from "~/types/editor";
 import { getCoreErrorMessage } from "~/utils/coreErrors";
 
 const props = withDefaults(
@@ -89,22 +109,39 @@ const props = withDefaults(
         noteId: string;
         noteTitle: string;
         focusBlockId?: string | null;
+        reloadNonce?: number;
     }>(),
-    { focusBlockId: null },
+    {
+        focusBlockId: null,
+        reloadNonce: 0,
+    },
 );
 
 const emit = defineEmits<{
     "focus-block-done": [];
+    "note-updated": [note: NoteResponse];
 }>();
 
 const api = useCoreApi();
 const blocks = ref<NoteBlock[]>([]);
 const loadError = ref("");
 const blockActionError = ref("");
+const titleError = ref("");
+const titleDraft = ref("");
+const isEditingTitle = ref(false);
 const draggingId = ref<string | null>(null);
 const dropSlot = ref<number | null>(null);
+const selectionToken = ref(0);
+const selectionRestore = ref<{
+    blockId: string;
+    token: number;
+    anchor: number;
+    focus: number;
+} | null>(null);
 const formatting = ref<{
     blockId: string;
+    anchor: number;
+    focus: number;
     start: number;
     end: number;
     rect: DOMRect;
@@ -113,78 +150,102 @@ const formatting = ref<{
 } | null>(null);
 
 const dragActive = computed(() => draggingId.value != null);
-
-const textBlocks = computed(() =>
-    blocks.value.filter((b) => getTextContent(b.content) !== null),
-);
+const textBlocks = computed(() => blocks.value.filter((block) => getTextContent(block.content) !== null));
 
 watch(
     () => props.noteId,
-    (id) => {
-        if (id) {
-            loadBlocks();
-        }
+    () => {
+        resetTitleDraft();
+        void loadBlocks();
+    },
+    { immediate: true },
+);
+
+watch(
+    () => props.reloadNonce,
+    () => {
+        void loadBlocks();
     },
 );
 
-onMounted(() => {
-    if (props.noteId) {
-        loadBlocks();
-    }
-});
+watch(
+    () => props.noteTitle,
+    () => {
+        if (!isEditingTitle.value) {
+            resetTitleDraft();
+        }
+    },
+);
 
 watch(
     [() => props.focusBlockId, blocks],
     async () => {
         const id = props.focusBlockId;
-        if (!id || import.meta.server) {
-            return;
-        }
-        if (!blocks.value.some((b) => b.id === id)) {
+        if (!id || import.meta.server || !blocks.value.some((block) => block.id === id)) {
             return;
         }
         await nextTick();
-        const el = document.querySelector(`[data-block-id="${id}"]`);
-        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        const element = document.querySelector(`[data-block-id="${id}"]`);
+        element?.scrollIntoView({ behavior: "smooth", block: "center" });
         emit("focus-block-done");
     },
     { flush: "post" },
 );
 
+function resolvedTitle(value = props.noteTitle): string {
+    return value.trim() || "Untitled note";
+}
+
+function resetTitleDraft() {
+    titleDraft.value = resolvedTitle();
+    titleError.value = "";
+    isEditingTitle.value = false;
+}
+
+async function commitTitle() {
+    isEditingTitle.value = false;
+    titleError.value = "";
+    const nextTitle = resolvedTitle(titleDraft.value);
+    titleDraft.value = nextTitle;
+    if (nextTitle === resolvedTitle()) {
+        return;
+    }
+    try {
+        const note = await api.updateNote(props.noteId, { title: nextTitle });
+        emit("note-updated", note);
+        titleDraft.value = resolvedTitle(note.title);
+    } catch (error: unknown) {
+        titleError.value = getCoreErrorMessage(error, "Could not rename note.");
+        titleDraft.value = resolvedTitle();
+    }
+}
+
 async function loadBlocks() {
-    if (import.meta.server) {
+    if (import.meta.server || !props.noteId) {
         return;
     }
     loadError.value = "";
     try {
-        const res = await api.listBlocks(props.noteId);
-        const list = Array.isArray(res?.blocks) ? res.blocks : [];
-        blocks.value = list as NoteBlock[];
-    } catch (e: unknown) {
+        const response = await api.listBlocks(props.noteId);
+        blocks.value = Array.isArray(response?.blocks) ? response.blocks as NoteBlock[] : [];
+    } catch (error: unknown) {
         blocks.value = [];
-        loadError.value = getCoreErrorMessage(
-            e,
-            "Could not load note blocks.",
-        );
+        loadError.value = getCoreErrorMessage(error, "Could not load note blocks.");
     }
 }
 
-function onBlocksUpdated(list: NoteBlock[]) {
-    blocks.value = list;
+function onBlockUpdated(updated: NoteBlock) {
+    blocks.value = blocks.value.map((block) => block.id === updated.id ? updated : block);
 }
 
 async function addTextBlock() {
     blockActionError.value = "";
-    const list = textBlocks.value;
-    const afterId = list.length ? list[list.length - 1].id : null;
+    const afterId = textBlocks.value[textBlocks.value.length - 1]?.id ?? null;
     try {
-        await api.createTextBlock(props.noteId, afterId, "");
-        await loadBlocks();
-    } catch (e: unknown) {
-        blockActionError.value = getCoreErrorMessage(
-            e,
-            "Could not add block.",
-        );
+        const block = await api.createTextBlock(props.noteId, afterId, "");
+        blocks.value = [...blocks.value, block];
+    } catch (error: unknown) {
+        blockActionError.value = getCoreErrorMessage(error, "Could not add block.");
     }
 }
 
@@ -195,12 +256,10 @@ async function removeBlock(blockId: string) {
     blockActionError.value = "";
     try {
         await api.deleteBlock(props.noteId, blockId);
-        await loadBlocks();
-    } catch (e: unknown) {
-        blockActionError.value = getCoreErrorMessage(
-            e,
-            "Could not delete block.",
-        );
+        blocks.value = blocks.value.filter((block) => block.id !== blockId);
+        formatting.value = formatting.value?.blockId === blockId ? null : formatting.value;
+    } catch (error: unknown) {
+        blockActionError.value = getCoreErrorMessage(error, "Could not delete block.");
     }
 }
 
@@ -226,58 +285,74 @@ function onDragLeaveSlot(slot: number) {
     }
 }
 
+function moveBlockLocally(list: NoteBlock[], fromIndex: number, toIndex: number): NoteBlock[] {
+    const next = [...list];
+    const [item] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, item);
+    return next;
+}
+
 async function onDrop(slotIndex: number) {
     const dragged = draggingId.value;
     if (!dragged) {
         return;
     }
-    const list = textBlocks.value;
-    if (list.length === 0) {
+    const list = [...textBlocks.value];
+    const fromIndex = list.findIndex((block) => block.id === dragged);
+    if (fromIndex < 0) {
         onDragEnd();
         return;
     }
 
+    const targetIndex = slotIndex > fromIndex ? slotIndex - 1 : slotIndex;
+    if (targetIndex === fromIndex) {
+        onDragEnd();
+        return;
+    }
+
+    const reordered = moveBlockLocally(list, fromIndex, Math.max(0, Math.min(targetIndex, list.length - 1)));
+    const movedIndex = reordered.findIndex((block) => block.id === dragged);
+    const previousBlock = movedIndex > 0 ? reordered[movedIndex - 1] : null;
+    const nextBlock = reordered[movedIndex + 1] ?? null;
+
+    blockActionError.value = "";
     try {
-        if (slotIndex === 0) {
+        if (!previousBlock && nextBlock) {
             await api.patchBlock(props.noteId, dragged, {
                 op: "move",
-                before_id: list[0].id,
+                before_id: nextBlock.id,
             });
         } else {
-            const prev = list[slotIndex - 1];
-            const afterId = prev?.id;
-            if (!afterId || afterId === dragged) {
-                onDragEnd();
-                return;
-            }
             await api.patchBlock(props.noteId, dragged, {
                 op: "move",
-                after_id: afterId,
+                after_id: previousBlock?.id ?? null,
             });
         }
-        await loadBlocks();
+        blocks.value = reordered;
+    } catch (error: unknown) {
+        blockActionError.value = getCoreErrorMessage(error, "Could not move block.");
     } finally {
         onDragEnd();
     }
 }
 
 function selectionStyleInRange(block: NoteBlock, start: number, end: number) {
-    const tc = getTextContent(block.content);
-    if (!tc) {
+    const text = getTextContent(block.content);
+    if (!text) {
         return { bold: false, italic: false };
     }
     let pos = 0;
     let bold = false;
     let italic = false;
     let any = false;
-    for (const c of tc.chunks) {
-        const next = pos + scalarLen(c.text);
+    for (const chunk of text.chunks) {
+        const next = pos + scalarLen(chunk.text);
         if (next > start && pos < end) {
             any = true;
-            if (c.style.bold === true) {
+            if (chunk.style.bold === true) {
                 bold = true;
             }
-            if (c.style.italic === true) {
+            if (chunk.style.italic === true) {
                 italic = true;
             }
         }
@@ -288,19 +363,17 @@ function selectionStyleInRange(block: NoteBlock, start: number, end: number) {
 
 function onFormatSelect(
     blockId: string,
-    payload: { start: number; end: number; rect: DOMRect },
+    payload: { anchor: number; focus: number; start: number; end: number; rect: DOMRect },
 ) {
-    const block = blocks.value.find((b) => b.id === blockId);
+    const block = blocks.value.find((item) => item.id === blockId);
     if (!block) {
         return;
     }
-    const { bold, italic } = selectionStyleInRange(
-        block,
-        payload.start,
-        payload.end,
-    );
+    const { bold, italic } = selectionStyleInRange(block, payload.start, payload.end);
     formatting.value = {
         blockId,
+        anchor: payload.anchor,
+        focus: payload.focus,
         start: payload.start,
         end: payload.end,
         rect: payload.rect,
@@ -322,65 +395,62 @@ function onBlockClick(blockId: string) {
 }
 
 function blockById(id: string) {
-    return blocks.value.find((b) => b.id === id);
+    return blocks.value.find((block) => block.id === id);
+}
+
+async function applyFormatting(style: { bold?: true; italic?: true }, enabled: boolean) {
+    const current = formatting.value;
+    if (!current) {
+        return;
+    }
+    const block = blockById(current.blockId);
+    const text = block ? getTextContent(block.content) : null;
+    if (!block || !text) {
+        return;
+    }
+
+    blockActionError.value = "";
+    const nextChunks = setFormattingOnChunks(text.chunks, current.start, current.end, style, enabled);
+    const nextBlock = replaceBlockChunks(block, nextChunks);
+    onBlockUpdated(nextBlock);
+
+    selectionToken.value += 1;
+    selectionRestore.value = {
+        blockId: current.blockId,
+        token: selectionToken.value,
+        anchor: current.anchor,
+        focus: current.focus,
+    };
+
+    try {
+        await api.patchBlock(props.noteId, current.blockId, {
+            op: enabled ? "enable_formatting" : "disable_formatting",
+            start: current.start,
+            end: current.end,
+            ...style,
+        });
+    } catch (error: unknown) {
+        blockActionError.value = getCoreErrorMessage(error, "Could not update formatting.");
+        await loadBlocks();
+    } finally {
+        formatting.value = null;
+    }
 }
 
 async function applyFormatBold() {
-    const fmt = formatting.value;
-    if (!fmt) {
+    const current = formatting.value;
+    if (!current) {
         return;
     }
-    const block = blockById(fmt.blockId);
-    if (!block) {
-        return;
-    }
-    const { bold } = selectionStyleInRange(block, fmt.start, fmt.end);
-    if (bold) {
-        await api.patchBlock(props.noteId, fmt.blockId, {
-            op: "disable_formatting",
-            start: fmt.start,
-            end: fmt.end,
-            bold: true,
-        });
-    } else {
-        await api.patchBlock(props.noteId, fmt.blockId, {
-            op: "enable_formatting",
-            start: fmt.start,
-            end: fmt.end,
-            bold: true,
-        });
-    }
-    await loadBlocks();
-    formatting.value = null;
+    await applyFormatting({ bold: true }, !current.bold);
 }
 
 async function applyFormatItalic() {
-    const fmt = formatting.value;
-    if (!fmt) {
+    const current = formatting.value;
+    if (!current) {
         return;
     }
-    const block = blockById(fmt.blockId);
-    if (!block) {
-        return;
-    }
-    const { italic } = selectionStyleInRange(block, fmt.start, fmt.end);
-    if (italic) {
-        await api.patchBlock(props.noteId, fmt.blockId, {
-            op: "disable_formatting",
-            start: fmt.start,
-            end: fmt.end,
-            italic: true,
-        });
-    } else {
-        await api.patchBlock(props.noteId, fmt.blockId, {
-            op: "enable_formatting",
-            start: fmt.start,
-            end: fmt.end,
-            italic: true,
-        });
-    }
-    await loadBlocks();
-    formatting.value = null;
+    await applyFormatting({ italic: true }, !current.italic);
 }
 </script>
 
@@ -401,14 +471,34 @@ async function applyFormatItalic() {
     padding: 28px 0 12px;
 }
 
-.editor-titlebar h1 {
-    margin: 0;
+.editor-title-wrap {
+    min-width: 0;
+    flex: 1;
+}
+
+.editor-title-input {
+    width: 100%;
+    border: 0;
+    background: transparent;
     color: var(--text-primary);
     font-family: var(--font-heading);
     font-size: clamp(26px, 4vw, 34px);
     font-weight: 500;
     letter-spacing: -0.04em;
     line-height: 40px;
+    outline: none;
+    padding: 0;
+}
+
+.editor-title-input::placeholder {
+    color: var(--text-disabled);
+}
+
+.title-error {
+    margin: 6px 0 0;
+    color: var(--danger);
+    font-size: 12px;
+    line-height: 18px;
 }
 
 .add-block {
@@ -449,7 +539,6 @@ async function applyFormatItalic() {
 .block-canvas {
     width: min(584px, calc(100% - 48px));
     margin: 0 auto;
-    padding: 0;
 }
 
 .block-list {
@@ -477,39 +566,34 @@ async function applyFormatItalic() {
     line-height: 24px;
 }
 
-.empty-editor .btn {
-    min-height: 36px;
-    border-color: transparent;
-    background: var(--bg-3);
-    color: var(--text-secondary);
-    padding: 6px 14px;
-    font-size: 13px;
-    line-height: 20px;
-}
-
 .drop-slot {
     position: relative;
-    height: 4px;
+    height: 12px;
     width: 100%;
 }
 
 .drop-hitbox {
     position: absolute;
-    inset: -10px 0;
+    inset: 0;
     z-index: 1;
 }
 
 .drop-line {
     position: absolute;
-    inset: 1px 0 auto;
+    inset: 5px 0 auto;
     height: 2px;
     border-radius: var(--r-pill);
     background: transparent;
-    transition: background-color 120ms ease;
+    transition:
+        background-color 120ms ease,
+        box-shadow 120ms ease,
+        transform 120ms ease;
 }
 
-.drop-line.is-active {
+.drop-slot.is-active .drop-line {
     background: var(--accent-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-primary) 18%, transparent);
+    transform: scaleY(1.3);
 }
 
 .block-row {
@@ -518,47 +602,18 @@ async function applyFormatItalic() {
     grid-template-columns: minmax(0, 1fr) 32px;
     gap: 8px;
     align-items: start;
-    transition:
-        opacity 120ms ease,
-        transform 120ms ease;
 }
 
 .block-row.is-dragging {
-    opacity: 0.45;
-    transform: scale(0.997);
-}
-
-.block-shell {
-    min-width: 0;
+    opacity: 0.58;
 }
 
 .delete-block {
-    margin-top: 1px;
     opacity: 0;
+    transition: opacity 120ms ease;
 }
 
 .block-row:hover .delete-block {
     opacity: 1;
-}
-
-.delete-block:hover {
-    color: var(--danger);
-}
-
-@media (max-width: 760px) {
-    .editor-titlebar,
-    .editor-messages,
-    .block-canvas {
-        width: min(584px, calc(100% - 28px));
-    }
-
-    .editor-titlebar {
-        flex-direction: column;
-        padding-top: 22px;
-    }
-
-    .block-row {
-        grid-template-columns: minmax(0, 1fr) 28px;
-    }
 }
 </style>
