@@ -35,7 +35,15 @@ notalking/
 
 ## Запуск Core Service
 
-Из каталога `core`:
+Из корня репозитория (поднимает зависимости в Docker и стартует Core с `DATABASE_URL` / `REDIS_URL` / `QDRANT_URL` / `NATS_URL` для localhost). Семантический поиск: локальный **Ollama** (`ollama serve`) и модель **`nomic-embed-text-v2-moe`** (`ollama pull nomic-embed-text-v2-moe`); переменные `EMBEDDING_*` заданы в `Justfile`.
+
+```bash
+just run
+```
+
+Если вы уже подняли Compose и запускаете из каталога `core`, используйте **`just run-with-compose`** (или задайте `DATABASE_URL` вручную); иначе по умолчанию включится SQLite.
+
+Только бинарь без Docker (по умолчанию SQLite в **`core/data/core.db`**; путь считается от каталога `core/`, не от текущей оболочки):
 
 ```bash
 cd core

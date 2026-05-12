@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package notalking.v1;
+
+// Core Intelligence bridge -- synchronous RPCs from Intelligence to Core (SPEC 5, 6).
+service CoreBridge {
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc GetNoteContext(GetNoteContextRequest) returns (GetNoteContextResponse);
+  rpc SearchNotes(SearchNotesRequest) returns (SearchNotesResponse);
+  rpc GetNoteContent(GetNoteContentRequest) returns (GetNoteContentResponse);
+  rpc CreateNote(CreateNoteRequest) returns (CreateNoteResponse);
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;
+}
+
+message GetNoteContextRequest {
+  string user_id = 1;
+  string note_id = 2;
+}
+
+message GetNoteContextResponse {
+  string title = 1;
+  string head_block_id = 2;
+}
+
+message SearchNotesRequest {
+  string user_id = 1;
+  string query = 2;
+  uint32 limit = 3;
+}
+
+message SearchNotesResponse {
+  repeated NoteSearchHit hits = 1;
+}
+
+message NoteSearchHit {
+  string note_id = 1;
+  string title = 2;
+  string matched_by = 3;
+  float score = 4;
+  string excerpt = 5;
+  string block_id = 6;
+}
+
+message GetNoteContentRequest {
+  string user_id = 1;
+  string note_id = 2;
+  uint32 max_blocks = 3;
+  uint32 max_chars_per_block = 4;
+}
+
+message GetNoteContentResponse {
+  string note_id = 1;
+  string title = 2;
+  string head_block_id = 3;
+  repeated NoteBlockContext blocks = 4;
+}
+
+message NoteBlockContext {
+  string block_id = 1;
+  uint32 order = 2;
+  string plain_text = 3;
+}
+
+message CreateNoteRequest {
+  string user_id = 1;
+  string title = 2;
+  string initial_text = 3;
+}
+
+message CreateNoteResponse {
+  string note_id = 1;
+  string title = 2;
+  string head_block_id = 3;
+}

@@ -32,8 +32,13 @@ pub async fn request_logging_middleware(request: Request, next: Next) -> Respons
     let user_agent = user_agent_from_header(request.headers().get(USER_AGENT)).to_owned();
 
     let started_at = Instant::now();
-    log::info!(
-        "[req:{request_id}] started method={method} uri={uri} ip={ip} user_agent=\"{user_agent}\""
+    tracing::info!(
+        request_id,
+        method = %method,
+        uri = %uri,
+        ip = %ip,
+        user_agent = %user_agent,
+        "request started",
     );
 
     let response = next.run(request).await;
@@ -41,31 +46,34 @@ pub async fn request_logging_middleware(request: Request, next: Next) -> Respons
     let elapsed_ms = started_at.elapsed().as_millis();
 
     if status.is_server_error() {
-        log::error!(
-            "[req:{request_id}] finished status={} elapsed_ms={} method={} uri={} ip={}",
-            status.as_u16(),
+        tracing::error!(
+            request_id,
+            status = status.as_u16(),
             elapsed_ms,
-            method,
-            uri,
-            ip
+            method = %method,
+            uri = %uri,
+            ip = %ip,
+            "request finished",
         );
     } else if status.is_client_error() {
-        log::warn!(
-            "[req:{request_id}] finished status={} elapsed_ms={} method={} uri={} ip={}",
-            status.as_u16(),
+        tracing::warn!(
+            request_id,
+            status = status.as_u16(),
             elapsed_ms,
-            method,
-            uri,
-            ip
+            method = %method,
+            uri = %uri,
+            ip = %ip,
+            "request finished",
         );
     } else {
-        log::info!(
-            "[req:{request_id}] finished status={} elapsed_ms={} method={} uri={} ip={}",
-            status.as_u16(),
+        tracing::info!(
+            request_id,
+            status = status.as_u16(),
             elapsed_ms,
-            method,
-            uri,
-            ip
+            method = %method,
+            uri = %uri,
+            ip = %ip,
+            "request finished",
         );
     }
 

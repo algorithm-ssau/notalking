@@ -2,7 +2,6 @@
 
 pub mod block_repo;
 pub mod blocks;
-pub mod in_memory;
 pub mod repo;
 pub mod service;
 
@@ -14,6 +13,7 @@ pub struct Note {
     pub id: Uuid,
     pub user_id: Uuid,
     pub title: String,
+    pub head_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -80,7 +80,6 @@ pub trait NoteUsecase {
     ) -> Result<(), NoteError>;
 }
 
-/// High-level text operations on a single block (backed by `editor::text::TextBlock`).
 #[derive(Debug, Clone)]
 pub enum TextPatch {
     InsertText {

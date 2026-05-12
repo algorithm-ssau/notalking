@@ -6,7 +6,8 @@ use editor::content::Content;
 use uuid::Uuid;
 
 use crate::note::{
-    CreateNoteInput, DeleteNoteInput, Note, NoteError, NoteUsecase, TextPatch, blocks::LoadedNoteBlocks,
+    CreateNoteInput, DeleteNoteInput, Note, NoteError, NoteUsecase, TextPatch,
+    blocks::LoadedNoteBlocks,
 };
 
 use super::block_repo::BlockRepository;
@@ -50,13 +51,15 @@ where
         LoadedNoteBlocks::from_raw(raw)
     }
 
-    async fn save_blocks(&self, note_id: Uuid, doc: LoadedNoteBlocks) -> Result<(), NoteError> {
-        let raw = doc.into_raw()?;
-        self.blocks.save_document(note_id, &raw).await
-    }
-
-    async fn touch_note(&self, mut note: Note) -> Result<(), NoteError> {
+    async fn persist_loaded(
+        &self,
+        mut note: Note,
+        loaded: LoadedNoteBlocks,
+    ) -> Result<(), NoteError> {
+        note.head_id = loaded.head_id;
         note.updated_at = Utc::now();
+        let raw = loaded.into_raw()?;
+        self.blocks.save_document(note.id, &raw).await?;
         self.repo.update(note).await
     }
 }
@@ -72,18 +75,19 @@ where
         }
 
         let now = Utc::now();
+        let loaded = LoadedNoteBlocks::single_text_block(&input.initial_text, now);
+        let head_id = loaded.head_id;
         let note = Note {
             id: Uuid::new_v4(),
             user_id: input.user_id,
             title: input.title,
+            head_id,
             created_at: now,
             updated_at: now,
         };
 
         let created = self.repo.create(note).await?;
-        let loaded = LoadedNoteBlocks::single_text_block(&input.initial_text, now);
-        let raw = loaded.into_raw()?;
-        self.blocks.save_document(created.id, &raw).await?;
+        self.persist_loaded(created.clone(), loaded).await?;
         Ok(created)
     }
 
@@ -105,11 +109,7 @@ where
         self.repo.delete_by_id(input.note_id).await
     }
 
-    async fn list_blocks(
-        &self,
-        user_id: Uuid,
-        note_id: Uuid,
-    ) -> Result<Vec<Block<()>>, NoteError> {
+    async fn list_blocks(&self, user_id: Uuid, note_id: Uuid) -> Result<Vec<Block<()>>, NoteError> {
         self.ensure_note_owner(user_id, note_id).await?;
         let loaded = self.load_blocks(note_id).await?;
         Ok(loaded.ordered_blocks().into_iter().cloned().collect())
@@ -126,13 +126,8 @@ where
         let now = Utc::now();
         let mut loaded = self.load_blocks(note_id).await?;
         let id = loaded.insert_block_after(after_id, content, now)?;
-        let created = loaded
-            .blocks
-            .get(&id)
-            .cloned()
-            .ok_or(NoteError::Internal)?;
-        self.save_blocks(note_id, loaded).await?;
-        self.touch_note(note).await?;
+        let created = loaded.blocks.get(&id).cloned().ok_or(NoteError::Internal)?;
+        self.persist_loaded(note, loaded).await?;
         Ok(created)
     }
 
@@ -146,8 +141,7 @@ where
         let now = Utc::now();
         let mut loaded = self.load_blocks(note_id).await?;
         loaded.delete_block(block_id, now)?;
-        self.save_blocks(note_id, loaded).await?;
-        self.touch_note(note).await?;
+        self.persist_loaded(note, loaded).await?;
         Ok(())
     }
 
@@ -167,8 +161,7 @@ where
             (_, Some(before)) => loaded.move_block_before(block_id, before, now)?,
             (after, None) => loaded.move_block_after(block_id, after, now)?,
         }
-        self.save_blocks(note_id, loaded).await?;
-        self.touch_note(note).await?;
+        self.persist_loaded(note, loaded).await?;
         Ok(())
     }
 
@@ -194,19 +187,14 @@ where
                 position,
                 direction,
             } => tb.delete_at(position, direction),
-            TextPatch::EnableFormatting {
-                start,
-                end,
-                style,
-            } => tb.enable_formatting(start, end, style),
-            TextPatch::DisableFormatting {
-                start,
-                end,
-                style,
-            } => tb.disable_formatting(start, end, style),
+            TextPatch::EnableFormatting { start, end, style } => {
+                tb.enable_formatting(start, end, style)
+            }
+            TextPatch::DisableFormatting { start, end, style } => {
+                tb.disable_formatting(start, end, style)
+            }
         }
-        self.save_blocks(note_id, loaded).await?;
-        self.touch_note(note).await?;
+        self.persist_loaded(note, loaded).await?;
         Ok(())
     }
 }

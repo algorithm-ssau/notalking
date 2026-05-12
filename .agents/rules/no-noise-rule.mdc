@@ -1,0 +1,16 @@
+---
+name: 'no-noise'
+alwaysApply: true
+description: 'Prevent comment/doc/file noise. Keep changes minimal and intentional.'
+---
+
+## Output + changes discipline (hard rules)
+
+- Do NOT generate large docs, reports, checklists, summaries, changelogs, deployment guides unless the user explicitly asks.
+- Do NOT add new markdown files by default. Prefer updating existing files only.
+- Do NOT add "template"/"example" comments. Comments are allowed only for invariants / sharp edges / things easy to break.
+- Prefer deleting boilerplate over keeping it "just in case".
+
+## No overengineering (hard rule)
+
+- Do NOT create unnecessary abstractions and wrappers.

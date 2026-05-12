@@ -1,5 +1,11 @@
-**/target
-
 **/.idea/
+web/package-lock.json
+**/target
+**/__pycache__/
+**/*.pyc
+core/data/*.db
+intelligence/data/*.db
 
-**/docs/
+**/.DS_Store
+
+.codex
