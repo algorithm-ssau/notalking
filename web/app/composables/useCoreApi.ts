@@ -6,6 +6,7 @@ import type {
     NotesListResponse,
     SemanticSearchRequest,
     SemanticSearchResponse,
+    UpdateNoteRequest,
     SessionResponse,
     SessionsListResponse,
 } from "~/types/core";
@@ -87,6 +88,14 @@ export function useCoreApi() {
                 ...fetchOpts,
                 method: "POST",
                 body: { title, body },
+            });
+        },
+
+        updateNote(noteId: string, body: UpdateNoteRequest) {
+            return $fetch<NoteResponse>(`${CORE}/notes/${encodeURIComponent(noteId)}`, {
+                ...fetchOpts,
+                method: "PATCH",
+                body,
             });
         },
 

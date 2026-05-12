@@ -47,6 +47,14 @@ class CoreCreatedNote:
     head_block_id: str
 
 
+@dataclass(frozen=True)
+class CoreUpdatedNote:
+    note_id: str
+    title: str
+    head_block_id: str
+    plain_text: str
+
+
 class CoreBridgeClient:
     def __init__(self, target: str) -> None:
         self._target = target
@@ -136,6 +144,37 @@ class CoreBridgeClient:
             note_id=resp.note_id,
             title=resp.title,
             head_block_id=resp.head_block_id,
+        )
+
+    async def update_note(
+        self,
+        user_id: str,
+        note_id: str,
+        *,
+        mode: str,
+        title: str | None = None,
+        body: str = "",
+    ) -> CoreUpdatedNote:
+        await self.connect()
+        stub = self._stub()
+        mode_map = {
+            "replace": core_pb2.UPDATE_NOTE_MODE_REPLACE_BODY,
+            "append": core_pb2.UPDATE_NOTE_MODE_APPEND_BODY,
+            "rename": core_pb2.UPDATE_NOTE_MODE_UPDATE_TITLE,
+        }
+        req = core_pb2.UpdateNoteRequest(
+            user_id=user_id,
+            note_id=note_id,
+            mode=mode_map[mode],
+            title=title or "",
+            body=body,
+        )
+        resp = await stub.UpdateNote(req, timeout=30.0)
+        return CoreUpdatedNote(
+            note_id=resp.note_id,
+            title=resp.title,
+            head_block_id=resp.head_block_id,
+            plain_text=resp.plain_text,
         )
 
 

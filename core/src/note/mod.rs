@@ -30,6 +30,19 @@ pub struct DeleteNoteInput {
     pub note_id: Uuid,
 }
 
+pub struct UpdateNoteInput {
+    pub user_id: Uuid,
+    pub note_id: Uuid,
+    pub title: Option<String>,
+    pub body: Option<NoteBodyUpdate>,
+}
+
+#[derive(Debug, Clone)]
+pub enum NoteBodyUpdate {
+    ReplacePlainText { text: String },
+    AppendPlainText { text: String },
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum NoteError {
     InvalidInput,
@@ -44,6 +57,7 @@ pub enum NoteError {
 pub trait NoteUsecase {
     async fn create_note(&self, input: CreateNoteInput) -> Result<Note, NoteError>;
     async fn list_notes(&self, user_id: Uuid) -> Result<Vec<Note>, NoteError>;
+    async fn update_note(&self, input: UpdateNoteInput) -> Result<Note, NoteError>;
     async fn delete_note(&self, input: DeleteNoteInput) -> Result<(), NoteError>;
     async fn list_blocks(
         &self,
