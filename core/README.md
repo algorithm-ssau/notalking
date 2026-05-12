@@ -97,6 +97,7 @@ All require **`session_id`** cookie unless noted.
 |--------|------|----------------|---------|
 | **GET** | `/notes` | Query: `page` (default 1), `per_page` (default 20, max 100) | **200** paginated list |
 | **POST** | `/notes` | `{ "title": string, "body"?: string }` | **201** note + refreshed cookie |
+| **PATCH** | `/notes/{note_id}` | `{ "title"?: string }` | **200** updated note + refreshed cookie |
 | **DELETE** | `/notes/{note_id}` | — | **204** + refreshed cookie |
 | **GET** | `/notes/{note_id}/blocks` | — | **200** `{ "blocks": [ ... ] }` (editor block JSON) + refreshed cookie |
 | **POST** | `/notes/{note_id}/blocks` | See **Create block** | **201** block JSON + refreshed cookie |
@@ -160,7 +161,7 @@ When **`CORE_MCP_ENABLED`** is true (default), the MCP transport is mounted at *
 | **Prometheus metrics** | Optional **`CORE_METRICS_BIND`** (default in code **`0.0.0.0:40001`** when enabled in defaults). |
 | **gRPC** | Optional **`CORE_GRPC_BIND`** -- CoreBridge service when set. |
 
-CoreBridge is the private synchronous contract used by Intelligence. It exposes health, current-note metadata, lexical/semantic note search, bounded note content retrieval, and explicit note creation through [`../common/proto/notalking/v1/core.proto`](../common/proto/notalking/v1/core.proto). Search works without Qdrant by matching titles and block text; when embeddings are configured, semantic hits are merged into the same response.
+CoreBridge is the private synchronous contract used by Intelligence. It exposes health, current-note metadata, lexical/semantic note search, bounded note content retrieval, explicit note creation, and note updates (`rename`, `append`, `replace`) through [`../common/proto/notalking/v1/core.proto`](../common/proto/notalking/v1/core.proto). Search works without Qdrant by matching titles and block text; when embeddings are configured, semantic hits are merged into the same response.
 
 ---
 

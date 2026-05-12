@@ -32,6 +32,10 @@ export interface NoteResponse {
     updated_at: string;
 }
 
+export interface UpdateNoteRequest {
+    title?: string | null;
+}
+
 export interface NotesListResponse {
     notes: NoteResponse[];
     page: number;

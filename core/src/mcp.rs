@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use crate::auth::{AuthUsecase, LogoutInput};
 use crate::http::state::AppState;
-use crate::note::{CreateNoteInput, DeleteNoteInput, NoteUsecase};
+use crate::note::{CreateNoteInput, DeleteNoteInput, NoteBodyUpdate, NoteUsecase, UpdateNoteInput};
 
 #[derive(Clone)]
 pub struct NotalkingMcp {
@@ -95,6 +95,21 @@ struct CreateNoteParams {
     #[serde(default)]
     #[schemars(description = "Initial body text for the first block.")]
     pub initial_text: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct UpdateNoteParams {
+    #[schemars(description = "Note UUID.")]
+    pub note_id: String,
+    #[serde(default)]
+    #[schemars(description = "New note title when renaming or rewriting.")]
+    pub title: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "Plain-text note body used for replace or append modes.")]
+    pub body: Option<String>,
+    #[serde(default)]
+    #[schemars(description = "One of: rename, replace, append.")]
+    pub mode: Option<String>,
 }
 
 #[tool_router]
@@ -247,6 +262,66 @@ impl NotalkingMcp {
             .await
             .map_err(|e| McpError::invalid_params(format!("{e:?}"), None))?;
         Ok(r#"{"ok":true}"#.to_owned())
+    }
+
+    #[tool(
+        description = "Update a note title or rewrite/append the note body. Use mode rename, replace, or append."
+    )]
+    async fn update_note(
+        &self,
+        Extension(parts): Extension<Parts>,
+        Parameters(UpdateNoteParams {
+            note_id,
+            title,
+            body,
+            mode,
+        }): Parameters<UpdateNoteParams>,
+    ) -> Result<String, McpError> {
+        let uid = self.user_id(&parts).await?;
+        let note_id = Uuid::parse_str(&note_id)
+            .map_err(|_| McpError::invalid_params("invalid note_id", None))?;
+        let mode = mode.unwrap_or_else(|| {
+            if body.is_some() {
+                "replace".to_owned()
+            } else {
+                "rename".to_owned()
+            }
+        });
+
+        let body = match mode.as_str() {
+            "rename" => None,
+            "replace" => Some(NoteBodyUpdate::ReplacePlainText {
+                text: body.unwrap_or_default(),
+            }),
+            "append" => Some(NoteBodyUpdate::AppendPlainText {
+                text: body.unwrap_or_default(),
+            }),
+            _ => {
+                return Err(McpError::invalid_params(
+                    "mode must be rename, replace, or append",
+                    None,
+                ));
+            }
+        };
+
+        let note = self
+            .state
+            .note
+            .update_note(UpdateNoteInput {
+                user_id: uid,
+                note_id,
+                title,
+                body,
+            })
+            .await
+            .map_err(|e| McpError::invalid_params(format!("{e:?}"), None))?;
+        self.state.notify_embedding(uid, note.id);
+        serde_json::to_string_pretty(&serde_json::json!({
+            "id": note.id.to_string(),
+            "title": note.title,
+            "head_id": note.head_id.map(|h| h.to_string()),
+        }))
+        .map_err(|e| McpError::invalid_params(e.to_string(), None))
     }
 
     #[tool(

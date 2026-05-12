@@ -12,7 +12,7 @@ use crate::note::block_repo::BlockRepository;
 use crate::note::blocks::LoadedNoteBlocks;
 use crate::note::repo::Repo;
 use crate::note::service::NoteService;
-use crate::note::{CreateNoteInput, Note, NoteError, NoteUsecase};
+use crate::note::{CreateNoteInput, Note, NoteBodyUpdate, NoteError, NoteUsecase, UpdateNoteInput};
 use crate::persist::SqlNoteStore;
 
 pub mod notalking {
@@ -25,7 +25,8 @@ use notalking::v1::core_bridge_server::{CoreBridge, CoreBridgeServer};
 use notalking::v1::{
     CreateNoteRequest, CreateNoteResponse, GetNoteContentRequest, GetNoteContentResponse,
     GetNoteContextRequest, GetNoteContextResponse, HealthCheckRequest, HealthCheckResponse,
-    NoteBlockContext, NoteSearchHit, SearchNotesRequest, SearchNotesResponse,
+    NoteBlockContext, NoteSearchHit, SearchNotesRequest, SearchNotesResponse, UpdateNoteMode,
+    UpdateNoteRequest, UpdateNoteResponse,
 };
 
 pub struct CoreGrpcService {
@@ -202,6 +203,16 @@ impl CoreGrpcService {
                 },
             );
         }
+    }
+
+    async fn plain_text_for_note(&self, note_id: Uuid) -> Result<String, Status> {
+        Ok(self
+            .ordered_blocks(note_id)
+            .await?
+            .into_iter()
+            .map(|block| block_plain_text(&block))
+            .collect::<Vec<_>>()
+            .join("\n\n"))
     }
 }
 
@@ -424,6 +435,68 @@ impl CoreBridge for CoreGrpcService {
             note_id: note.id.to_string(),
             title: note.title,
             head_block_id: note.head_id.map(|u| u.to_string()).unwrap_or_default(),
+        }))
+    }
+
+    async fn update_note(
+        &self,
+        request: Request<UpdateNoteRequest>,
+    ) -> Result<Response<UpdateNoteResponse>, Status> {
+        let inner = request.into_inner();
+        let user_id = parse_uuid(&inner.user_id, "user_id")?;
+        let note_id = parse_uuid(&inner.note_id, "note_id")?;
+
+        let (title, body) = match UpdateNoteMode::try_from(inner.mode) {
+            Ok(UpdateNoteMode::UpdateTitle) => {
+                let title = inner.title.trim().to_owned();
+                if title.is_empty() {
+                    return Err(Status::invalid_argument("title"));
+                }
+                (Some(title), None)
+            }
+            Ok(UpdateNoteMode::ReplaceBody) => (
+                if inner.title.trim().is_empty() {
+                    None
+                } else {
+                    Some(inner.title.trim().to_owned())
+                },
+                Some(NoteBodyUpdate::ReplacePlainText { text: inner.body }),
+            ),
+            Ok(UpdateNoteMode::AppendBody) => (
+                if inner.title.trim().is_empty() {
+                    None
+                } else {
+                    Some(inner.title.trim().to_owned())
+                },
+                Some(NoteBodyUpdate::AppendPlainText { text: inner.body }),
+            ),
+            Ok(UpdateNoteMode::Unspecified) | Err(_) => {
+                return Err(Status::invalid_argument("mode"));
+            }
+        };
+
+        let note = self
+            .note_service
+            .update_note(UpdateNoteInput {
+                user_id,
+                note_id,
+                title,
+                body,
+            })
+            .await
+            .map_err(note_error_status)?;
+
+        let plain_text = self.plain_text_for_note(note.id).await?;
+
+        if let Some(embedding) = self.embedding.as_ref() {
+            embedding.notify_blocks_changed(user_id, note.id);
+        }
+
+        Ok(Response::new(UpdateNoteResponse {
+            note_id: note.id.to_string(),
+            title: note.title,
+            head_block_id: note.head_id.map(|u| u.to_string()).unwrap_or_default(),
+            plain_text,
         }))
     }
 }

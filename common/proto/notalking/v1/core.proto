@@ -9,6 +9,7 @@ service CoreBridge {
   rpc SearchNotes(SearchNotesRequest) returns (SearchNotesResponse);
   rpc GetNoteContent(GetNoteContentRequest) returns (GetNoteContentResponse);
   rpc CreateNote(CreateNoteRequest) returns (CreateNoteResponse);
+  rpc UpdateNote(UpdateNoteRequest) returns (UpdateNoteResponse);
 }
 
 message HealthCheckRequest {}
@@ -76,4 +77,26 @@ message CreateNoteResponse {
   string note_id = 1;
   string title = 2;
   string head_block_id = 3;
+}
+
+enum UpdateNoteMode {
+  UPDATE_NOTE_MODE_UNSPECIFIED = 0;
+  UPDATE_NOTE_MODE_REPLACE_BODY = 1;
+  UPDATE_NOTE_MODE_APPEND_BODY = 2;
+  UPDATE_NOTE_MODE_UPDATE_TITLE = 3;
+}
+
+message UpdateNoteRequest {
+  string user_id = 1;
+  string note_id = 2;
+  UpdateNoteMode mode = 3;
+  string title = 4;
+  string body = 5;
+}
+
+message UpdateNoteResponse {
+  string note_id = 1;
+  string title = 2;
+  string head_block_id = 3;
+  string plain_text = 4;
 }

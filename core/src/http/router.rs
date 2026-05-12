@@ -12,7 +12,7 @@ use super::{
         create_note_handler, delete_note_block_handler, delete_note_handler, health_handler,
         list_note_blocks_handler, list_notes_handler, list_sessions_handler, login_handler,
         logout_handler, me_handler, patch_note_block_handler, register_handler,
-        semantic_search_handler,
+        semantic_search_handler, update_note_handler,
     },
     logging::request_logging_middleware,
     rate_limit::{auth_rate_limit, global_rate_limit},
@@ -35,7 +35,10 @@ fn protected_api_router(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/notes", get(list_notes_handler))
         .route("/notes", post(create_note_handler))
-        .route("/notes/{note_id}", delete(delete_note_handler))
+        .route(
+            "/notes/{note_id}",
+            delete(delete_note_handler).patch(update_note_handler),
+        )
         .route(
             "/notes/{note_id}/blocks",
             get(list_note_blocks_handler).post(create_note_block_handler),

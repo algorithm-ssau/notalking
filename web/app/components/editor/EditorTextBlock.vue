@@ -1,7 +1,7 @@
 <template>
     <div
         :class="[
-            'editor-block group',
+            'editor-block',
             {
                 'is-dragging': isDragging,
                 'is-active': isFocused,
@@ -39,19 +39,32 @@
 
 <script setup lang="ts">
 import type { NoteBlock, TextChunk, TextStyle } from "~/types/editor";
-import { getTextContent, plainFromChunks, scalarLen } from "~/types/editor";
+import {
+    cloneChunks,
+    deleteRangeFromChunks,
+    getTextContent,
+    insertTextIntoChunks,
+    plainFromChunks,
+    replaceBlockChunks,
+    scalarLen,
+} from "~/types/editor";
 
-const DEBOUNCE_MS = 300;
+const DEBOUNCE_MS = 220;
 
 const props = defineProps<{
     noteId: string;
     block: NoteBlock;
     isDragging: boolean;
+    selectionRestore?: {
+        token: number;
+        anchor: number;
+        focus: number;
+    } | null;
 }>();
 
 const emit = defineEmits<{
-    "blocks-updated": [blocks: NoteBlock[]];
-    "format-select": [payload: { start: number; end: number; rect: DOMRect }];
+    "block-updated": [block: NoteBlock];
+    "format-select": [payload: { anchor: number; focus: number; start: number; end: number; rect: DOMRect }];
     "format-clear": [];
     "drag-start": [blockId: string];
 }>();
@@ -62,6 +75,8 @@ const isComposing = ref(false);
 const isFocused = ref(false);
 const dirty = ref(false);
 const lastSyncedPlain = ref("");
+const lastSyncedChunks = ref<TextChunk[]>([]);
+const renderedSignature = ref("");
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let patchTail = Promise.resolve();
 
@@ -69,11 +84,10 @@ function enqueuePatch(fn: () => Promise<void>) {
     patchTail = patchTail.then(fn).catch(console.error);
 }
 
-function normalizePlain(s: string): string {
-    return s.replace(/\u200b/g, "");
+function normalizePlain(value: string): string {
+    return value.replace(/\u200b/g, "");
 }
 
-/** Plain text from the editor DOM (preserves leading/trailing/repeated spaces). `innerText` collapses them. */
 function collectTextFromEditor(root: HTMLElement): string {
     let out = "";
     function walk(node: Node) {
@@ -84,8 +98,8 @@ function collectTextFromEditor(root: HTMLElement): string {
         if (node.nodeType !== Node.ELEMENT_NODE) {
             return;
         }
-        const el = node as HTMLElement;
-        if (el.tagName === "BR") {
+        const element = node as HTMLElement;
+        if (element.tagName === "BR") {
             out += "\n";
             return;
         }
@@ -97,13 +111,19 @@ function collectTextFromEditor(root: HTMLElement): string {
     return out;
 }
 
-function plainFromBlock(): string {
-    return normalizePlain(
-        plainFromChunks(getTextContent(props.block.content)?.chunks ?? []),
-    );
+function blockChunks(): TextChunk[] {
+    return cloneChunks(getTextContent(props.block.content)?.chunks ?? []);
 }
 
-function escapeHtml(text: string) {
+function blockSignature(): string {
+    return JSON.stringify(blockChunks());
+}
+
+function plainFromBlock(): string {
+    return normalizePlain(plainFromChunks(blockChunks()));
+}
+
+function escapeHtml(text: string): string {
     return text
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
@@ -122,217 +142,197 @@ function chunkStyleAttr(style: TextStyle): string {
     if (style.color && /^#[0-9A-Fa-f]{3,8}$/.test(style.color)) {
         parts.push(`color:${style.color}`);
     }
-    return parts.length ? ` style="${parts.join(";")}"` : "";
+    return parts.length ? ` style="${parts.join(';')}"` : "";
 }
 
-function syncDomFromChunks() {
-    const el = editableRef.value;
-    if (!el) {
+function syncDomFromChunks(force = false) {
+    const element = editableRef.value;
+    if (!element) {
         return;
     }
-    const tc = getTextContent(props.block.content);
-    const chunks = tc?.chunks ?? [];
+    const signature = blockSignature();
+    if (!force && renderedSignature.value === signature) {
+        return;
+    }
+    const chunks = blockChunks();
     if (chunks.length === 0 || (chunks.length === 1 && chunks[0].text === "")) {
-        el.innerHTML = '<span style="color:var(--text-disabled)">&#x200b;</span>';
-        return;
+        element.innerHTML = "";
+    } else {
+        element.innerHTML = chunks.map((chunk) => `<span${chunkStyleAttr(chunk.style)}>${escapeHtml(chunk.text)}</span>`).join("");
     }
-    el.innerHTML = chunks
-        .map((c) => {
-            const cls = [
-                c.style.bold ? "font-semibold" : "",
-                c.style.italic ? "italic" : "",
-            ]
-                .filter(Boolean)
-                .join(" ");
-            const cs = chunkStyleAttr(c.style);
-            return `<span class="${cls}"${cs}>${escapeHtml(c.text)}</span>`;
-        })
-        .join("");
+    renderedSignature.value = signature;
 }
 
 watch(
     () => props.block,
     () => {
-        if (!isComposing.value && !dirty.value) {
-            nextTick(() => {
-                syncDomFromChunks();
-                lastSyncedPlain.value = plainFromBlock();
-            });
+        const nextSignature = blockSignature();
+        lastSyncedChunks.value = blockChunks();
+        lastSyncedPlain.value = plainFromBlock();
+        if (!dirty.value && !isComposing.value) {
+            nextTick(() => syncDomFromChunks(nextSignature !== renderedSignature.value));
         }
     },
-    { deep: true },
+    { deep: true, immediate: true },
+);
+
+watch(
+    () => props.selectionRestore?.token,
+    async (token) => {
+        if (!token || !props.selectionRestore) {
+            return;
+        }
+        await nextTick();
+        restoreSelection(props.selectionRestore.anchor, props.selectionRestore.focus);
+    },
 );
 
 onMounted(() => {
-    syncDomFromChunks();
+    syncDomFromChunks(true);
+    lastSyncedChunks.value = blockChunks();
     lastSyncedPlain.value = plainFromBlock();
 });
 
-/** UTF-16 offset within `s` for a given Unicode-scalar index. */
-function utf16OffsetAtScalarIndex(s: string, scalarIdx: number): number {
-    let u = 0;
-    let si = 0;
-    for (const ch of s) {
-        if (si >= scalarIdx) {
-            return u;
+function utf16OffsetAtScalarIndex(text: string, scalarIndex: number): number {
+    let utf16 = 0;
+    let seen = 0;
+    for (const char of text) {
+        if (seen >= scalarIndex) {
+            return utf16;
         }
-        u += ch.length;
-        si++;
+        utf16 += char.length;
+        seen += 1;
     }
-    return u;
+    return utf16;
 }
 
-/** Caret position as Unicode-scalar offset from editor start (uses focus for bidirectional selections). */
-function getCaretScalarOffset(): number {
-    const el = editableRef.value;
-    if (!el) {
-        return 0;
+function resolvePointAtScalarOffset(root: HTMLElement, offset: number): { node: Node; offset: number } {
+    let seen = 0;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let current = walker.nextNode();
+    while (current) {
+        const text = current.textContent ?? "";
+        const scalarCount = scalarLen(text);
+        if (seen + scalarCount >= offset) {
+            const local = offset - seen;
+            return {
+                node: current,
+                offset: Math.min(utf16OffsetAtScalarIndex(text, local), text.length),
+            };
+        }
+        seen += scalarCount;
+        current = walker.nextNode();
     }
-    const sel = window.getSelection();
-    if (
-        !sel ||
-        sel.rangeCount === 0 ||
-        !sel.focusNode ||
-        !el.contains(sel.focusNode)
-    ) {
-        return scalarLen(normalizePlain(collectTextFromEditor(el)));
-    }
-    const r = document.createRange();
-    r.setStart(el, 0);
+    return { node: root, offset: root.childNodes.length };
+}
+
+function rangeOffset(root: HTMLElement, node: Node, offset: number): number {
+    const range = document.createRange();
+    range.setStart(root, 0);
     try {
-        r.setEnd(sel.focusNode, sel.focusOffset);
+        range.setEnd(node, offset);
     } catch {
-        return scalarLen(normalizePlain(collectTextFromEditor(el)));
+        return scalarLen(normalizePlain(collectTextFromEditor(root)));
     }
-    return scalarLen(r.toString());
+    return scalarLen(range.toString());
 }
 
-function plainOffsetScalars(): { start: number; end: number } {
-    const el = editableRef.value;
-    if (!el) {
-        return { start: 0, end: 0 };
+function selectionSnapshot(): { anchor: number; focus: number; start: number; end: number } | null {
+    const element = editableRef.value;
+    const selection = window.getSelection();
+    if (!element || !selection || selection.rangeCount === 0 || !selection.anchorNode || !element.contains(selection.anchorNode)) {
+        return null;
     }
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) {
-        return { start: 0, end: 0 };
-    }
-    const range = sel.getRangeAt(0);
-    const rStart = document.createRange();
-    rStart.setStart(el, 0);
-    rStart.setEnd(range.startContainer, range.startOffset);
-    const rEnd = document.createRange();
-    rEnd.setStart(el, 0);
-    rEnd.setEnd(range.endContainer, range.endOffset);
-    const start = scalarLen(rStart.toString());
-    const end = scalarLen(rEnd.toString());
-    return { start, end: Math.max(start, end) };
+    const anchor = rangeOffset(element, selection.anchorNode, selection.anchorOffset);
+    const focus = selection.focusNode && element.contains(selection.focusNode)
+        ? rangeOffset(element, selection.focusNode, selection.focusOffset)
+        : anchor;
+    return {
+        anchor,
+        focus,
+        start: Math.min(anchor, focus),
+        end: Math.max(anchor, focus),
+    };
 }
 
-function setCaretPlainOffset(offset: number) {
-    const el = editableRef.value;
-    if (!el) {
+function restoreSelection(anchor: number, focus: number) {
+    const element = editableRef.value;
+    const selection = window.getSelection();
+    if (!element || !selection) {
         return;
     }
-    const sel = window.getSelection();
+    const anchorPoint = resolvePointAtScalarOffset(element, anchor);
+    const focusPoint = resolvePointAtScalarOffset(element, focus);
+    selection.removeAllRanges();
+    if (typeof selection.setBaseAndExtent === "function") {
+        selection.setBaseAndExtent(anchorPoint.node, anchorPoint.offset, focusPoint.node, focusPoint.offset);
+        return;
+    }
     const range = document.createRange();
-    let seenScalars = 0;
-
-    function walk(node: Node): boolean {
-        if (node.nodeType === Node.TEXT_NODE) {
-            const t = node.textContent ?? "";
-            const nScalars = scalarLen(t);
-            if (seenScalars + nScalars >= offset) {
-                const localScalar = offset - seenScalars;
-                const u16 = utf16OffsetAtScalarIndex(t, localScalar);
-                range.setStart(node, Math.min(u16, t.length));
-                range.collapse(true);
-                return true;
-            }
-            seenScalars += nScalars;
-        } else {
-            for (const ch of Array.from(node.childNodes)) {
-                if (walk(ch)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-    if (!walk(el)) {
-        range.selectNodeContents(el);
-        range.collapse(false);
-    }
-    sel?.removeAllRanges();
-    sel?.addRange(range);
+    range.setStart(anchorPoint.node, anchorPoint.offset);
+    range.setEnd(focusPoint.node, focusPoint.offset);
+    selection.addRange(range);
 }
 
 function pickStylePayload(style: TextStyle): Record<string, string | boolean> {
-    const out: Record<string, string | boolean> = {};
+    const output: Record<string, string | boolean> = {};
     if (style.bold === true) {
-        out.bold = true;
+        output.bold = true;
     }
     if (style.italic === true) {
-        out.italic = true;
+        output.italic = true;
     }
     if (style.color && /^#[0-9A-Fa-f]{3,8}$/.test(style.color)) {
-        out.color = style.color;
+        output.color = style.color;
     }
-    return out;
+    return output;
 }
 
-function stylePayloadAtScalarOffset(
-    chunks: TextChunk[],
-    offset: number,
-): Record<string, string | boolean> {
+function stylePayloadAtScalarOffset(chunks: TextChunk[], offset: number): Record<string, string | boolean> {
     if (chunks.length === 0) {
         return {};
     }
-    let pos = 0;
-    for (const c of chunks) {
-        const next = pos + scalarLen(c.text);
-        if (offset < next || (scalarLen(c.text) === 0 && offset === pos)) {
-            return pickStylePayload(c.style);
+    let position = 0;
+    for (const chunk of chunks) {
+        const next = position + scalarLen(chunk.text);
+        if (offset < next || (scalarLen(chunk.text) === 0 && offset === position)) {
+            return pickStylePayload(chunk.style);
         }
-        pos = next;
+        position = next;
     }
-    return pickStylePayload(chunks[chunks.length - 1].style);
+    return pickStylePayload(chunks[chunks.length - 1]?.style ?? {});
 }
 
-function diffPlain(
-    oldS: string,
-    newS: string,
-): { start: number; deleteCount: number; insert: string } | null {
-    if (oldS === newS) {
+function diffPlain(oldValue: string, newValue: string): { start: number; deleteCount: number; insert: string } | null {
+    if (oldValue === newValue) {
         return null;
     }
-    const oldC = [...oldS];
-    const newC = [...newS];
-    let i = 0;
-    const minLen = Math.min(oldC.length, newC.length);
-    while (i < minLen && oldC[i] === newC[i]) {
-        i++;
+    const oldChars = [...oldValue];
+    const newChars = [...newValue];
+    let start = 0;
+    const minLen = Math.min(oldChars.length, newChars.length);
+    while (start < minLen && oldChars[start] === newChars[start]) {
+        start += 1;
     }
-    let o = oldC.length - 1;
-    let n = newC.length - 1;
-    while (o >= i && n >= i && oldC[o] === newC[n]) {
-        o--;
-        n--;
+    let oldIndex = oldChars.length - 1;
+    let newIndex = newChars.length - 1;
+    while (oldIndex >= start && newIndex >= start && oldChars[oldIndex] === newChars[newIndex]) {
+        oldIndex -= 1;
+        newIndex -= 1;
     }
-    const deleteCount = o - i + 1;
-    const insert = newC.slice(i, n + 1).join("");
-    if (deleteCount === 0 && insert.length === 0) {
-        return null;
-    }
-    return { start: i, deleteCount, insert };
+    return {
+        start,
+        deleteCount: oldIndex - start + 1,
+        insert: newChars.slice(start, newIndex + 1).join(""),
+    };
 }
 
 function getEditorPlain(): string {
-    const el = editableRef.value;
-    if (!el) {
+    const element = editableRef.value;
+    if (!element) {
         return "";
     }
-    return normalizePlain(collectTextFromEditor(el));
+    return normalizePlain(collectTextFromEditor(element));
 }
 
 function scheduleSync() {
@@ -350,12 +350,13 @@ function scheduleSync() {
 }
 
 async function flushDebouncedSync() {
-    const el = editableRef.value;
-    if (!el) {
+    const element = editableRef.value;
+    if (!element) {
         dirty.value = false;
         return;
     }
 
+    const snapshot = selectionSnapshot();
     enqueuePatch(async () => {
         const newPlain = getEditorPlain();
         const oldPlain = lastSyncedPlain.value;
@@ -365,51 +366,41 @@ async function flushDebouncedSync() {
             return;
         }
 
-        const chunks = getTextContent(props.block.content)?.chunks ?? [];
-
+        const baseChunks = cloneChunks(lastSyncedChunks.value);
         try {
-            const { start, deleteCount, insert } = diff;
-            if (deleteCount > 0) {
+            let nextChunks = baseChunks;
+            if (diff.deleteCount > 0) {
                 await api.patchBlock(props.noteId, props.block.id, {
                     op: "delete_range",
-                    start,
-                    end: start + deleteCount,
+                    start: diff.start,
+                    end: diff.start + diff.deleteCount,
                 });
+                nextChunks = deleteRangeFromChunks(nextChunks, diff.start, diff.start + diff.deleteCount);
             }
-            if (insert.length > 0) {
-                const stylePayload = stylePayloadAtScalarOffset(chunks, start);
+            if (diff.insert.length > 0) {
+                const stylePayload = stylePayloadAtScalarOffset(baseChunks, diff.start);
                 await api.patchBlock(props.noteId, props.block.id, {
                     op: "insert_text",
-                    position: start,
-                    text: insert,
+                    position: diff.start,
+                    text: diff.insert,
                     ...stylePayload,
                 });
+                nextChunks = insertTextIntoChunks(nextChunks, diff.start, diff.insert, stylePayload as TextStyle);
             }
-            const { blocks } = await api.listBlocks(props.noteId);
-            emit("blocks-updated", blocks);
-            await nextTick();
-            const caretScalar = getCaretScalarOffset();
-            const self = blocks.find((b) => b.id === props.block.id);
-            if (self) {
-                lastSyncedPlain.value = normalizePlain(
-                    plainFromChunks(getTextContent(self.content)?.chunks ?? []),
-                );
-            } else {
-                lastSyncedPlain.value = getEditorPlain();
-            }
+            lastSyncedChunks.value = cloneChunks(nextChunks);
+            lastSyncedPlain.value = plainFromChunks(nextChunks);
+            renderedSignature.value = JSON.stringify(nextChunks);
+            emit("block-updated", replaceBlockChunks(props.block, nextChunks));
             dirty.value = false;
-            syncDomFromChunks();
-            await nextTick();
-            const root = editableRef.value;
-            if (root) {
-                root.focus();
-                const maxLen = scalarLen(lastSyncedPlain.value);
-                setCaretPlainOffset(Math.min(caretScalar, maxLen));
+            if (snapshot && isFocused.value) {
+                await nextTick();
+                restoreSelection(snapshot.anchor, snapshot.focus);
             }
-        } catch (e) {
-            console.error(e);
+        } catch (error) {
+            console.error(error);
             dirty.value = false;
-            syncDomFromChunks();
+            syncDomFromChunks(true);
+            lastSyncedChunks.value = blockChunks();
             lastSyncedPlain.value = plainFromBlock();
         }
     });
@@ -435,35 +426,38 @@ function onCompositionEnd() {
 }
 
 function reportSelection() {
-    const el = editableRef.value;
-    if (!el) {
-        return;
-    }
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) {
+    const element = editableRef.value;
+    const selection = window.getSelection();
+    if (!element || !selection || selection.rangeCount === 0 || !selection.anchorNode || !element.contains(selection.anchorNode)) {
         emit("format-clear");
         return;
     }
-    const { start, end } = plainOffsetScalars();
-    if (start === end) {
+    const snapshot = selectionSnapshot();
+    if (!snapshot || snapshot.start === snapshot.end) {
         emit("format-clear");
         return;
     }
-    const range = sel.getRangeAt(0);
-    emit("format-select", { start, end, rect: range.getBoundingClientRect() });
+    const range = selection.getRangeAt(0);
+    emit("format-select", {
+        anchor: snapshot.anchor,
+        focus: snapshot.focus,
+        start: snapshot.start,
+        end: snapshot.end,
+        rect: range.getBoundingClientRect(),
+    });
 }
 
-function onHandleDragStart(ev: DragEvent) {
-    ev.dataTransfer?.setData("application/x-notalking-block", props.block.id);
-    ev.dataTransfer?.setData("text/plain", props.block.id);
-    if (ev.dataTransfer) {
-        ev.dataTransfer.effectAllowed = "move";
+function onHandleDragStart(event: DragEvent) {
+    event.dataTransfer?.setData("application/x-notalking-block", props.block.id);
+    event.dataTransfer?.setData("text/plain", props.block.id);
+    if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
     }
     emit("drag-start", props.block.id);
 }
 
-function onEditorClick(ev: MouseEvent) {
-    ev.stopPropagation();
+function onEditorClick(event: MouseEvent) {
+    event.stopPropagation();
 }
 </script>
 
@@ -538,7 +532,7 @@ function onEditorClick(ev: MouseEvent) {
 }
 
 .editor-block.is-empty .editor-text::before {
-    content: "Start writing...";
+    content: 'Start writing...';
     color: var(--text-disabled);
     pointer-events: none;
 }
