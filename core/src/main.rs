@@ -52,8 +52,11 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(grpc_addr) = config.grpc_bind {
         let notes = state.note_store.clone();
+        let note_service = state.note.clone();
+        let embedding = state.embedding.clone();
         tokio::spawn(async move {
-            if let Err(e) = grpc_server::serve_grpc(grpc_addr, notes).await {
+            if let Err(e) = grpc_server::serve_grpc(grpc_addr, notes, note_service, embedding).await
+            {
                 tracing::error!(error = %e, "gRPC server exited");
             }
         });

@@ -48,7 +48,8 @@ impl LoadedNoteBlocks {
     pub fn from_raw(raw: RawBlockDocument) -> Result<Self, NoteError> {
         let mut blocks = HashMap::with_capacity(raw.blocks.len());
         for (id, bytes) in raw.blocks {
-            let block: Block<()> = serde_json::from_slice(&bytes).map_err(|_| NoteError::CorruptBlocks)?;
+            let block: Block<()> =
+                serde_json::from_slice(&bytes).map_err(|_| NoteError::CorruptBlocks)?;
             if block.id != id {
                 return Err(NoteError::CorruptBlocks);
             }
@@ -152,7 +153,11 @@ impl LoadedNoteBlocks {
     }
 
     pub fn delete_block(&mut self, block_id: Uuid, now: DateTime<Utc>) -> Result<(), NoteError> {
-        let block = self.blocks.get(&block_id).ok_or(NoteError::BlockNotFound)?.clone();
+        let block = self
+            .blocks
+            .get(&block_id)
+            .ok_or(NoteError::BlockNotFound)?
+            .clone();
         let prev = block.prev_id;
         let next = block.next_id;
 
@@ -219,7 +224,10 @@ impl LoadedNoteBlocks {
         }
 
         {
-            let b = self.blocks.get_mut(&block_id).ok_or(NoteError::BlockNotFound)?;
+            let b = self
+                .blocks
+                .get_mut(&block_id)
+                .ok_or(NoteError::BlockNotFound)?;
             b.prev_id = None;
             b.next_id = None;
             b.updated_at = now;
@@ -231,7 +239,10 @@ impl LoadedNoteBlocks {
                     if tail_id == block_id {
                         return Ok(());
                     }
-                    let b = self.blocks.get_mut(&block_id).ok_or(NoteError::BlockNotFound)?;
+                    let b = self
+                        .blocks
+                        .get_mut(&block_id)
+                        .ok_or(NoteError::BlockNotFound)?;
                     b.prev_id = Some(tail_id);
                     b.updated_at = now;
                     if let Some(t) = self.blocks.get_mut(&tail_id) {
@@ -243,12 +254,19 @@ impl LoadedNoteBlocks {
                 }
             }
             Some(after) => {
-                let after_next = self.blocks.get(&after).ok_or(NoteError::BlockNotFound)?.next_id;
+                let after_next = self
+                    .blocks
+                    .get(&after)
+                    .ok_or(NoteError::BlockNotFound)?
+                    .next_id;
                 if after_next == Some(block_id) {
                     return Ok(());
                 }
                 {
-                    let b = self.blocks.get_mut(&block_id).ok_or(NoteError::BlockNotFound)?;
+                    let b = self
+                        .blocks
+                        .get_mut(&block_id)
+                        .ok_or(NoteError::BlockNotFound)?;
                     b.prev_id = Some(after);
                     b.next_id = after_next;
                     b.updated_at = now;
@@ -317,7 +335,10 @@ impl LoadedNoteBlocks {
         }
 
         {
-            let b = self.blocks.get_mut(&block_id).ok_or(NoteError::BlockNotFound)?;
+            let b = self
+                .blocks
+                .get_mut(&block_id)
+                .ok_or(NoteError::BlockNotFound)?;
             b.prev_id = None;
             b.next_id = None;
             b.updated_at = now;
@@ -330,7 +351,10 @@ impl LoadedNoteBlocks {
             .prev_id;
 
         {
-            let b = self.blocks.get_mut(&block_id).ok_or(NoteError::BlockNotFound)?;
+            let b = self
+                .blocks
+                .get_mut(&block_id)
+                .ok_or(NoteError::BlockNotFound)?;
             b.prev_id = before_prev;
             b.next_id = Some(before_id);
             b.updated_at = now;
@@ -350,13 +374,20 @@ impl LoadedNoteBlocks {
         Ok(())
     }
 
-    pub fn text_mut(&mut self, block_id: Uuid, now: DateTime<Utc>) -> Result<&mut TextBlock, NoteError> {
-        let block = self.blocks.get_mut(&block_id).ok_or(NoteError::BlockNotFound)?;
+    pub fn text_mut(
+        &mut self,
+        block_id: Uuid,
+        now: DateTime<Utc>,
+    ) -> Result<&mut TextBlock, NoteError> {
+        let block = self
+            .blocks
+            .get_mut(&block_id)
+            .ok_or(NoteError::BlockNotFound)?;
         block.updated_at = now;
         match &mut block.content {
-            Content::Text(tb) | Content::OrderedListItem(tb, _) | Content::UnorderedListItem(tb, _) => {
-                Ok(tb)
-            }
+            Content::Text(tb)
+            | Content::OrderedListItem(tb, _)
+            | Content::UnorderedListItem(tb, _) => Ok(tb),
             Content::Image(_) | Content::Video(_) => Err(NoteError::InvalidOperation),
         }
     }

@@ -1,7 +1,10 @@
 **/.idea/
 web/package-lock.json
-**/docs
 **/target
+**/__pycache__/
+**/*.pyc
+core/data/*.db
+intelligence/data/*.db
 
 **/.DS_Store
 

@@ -38,12 +38,12 @@
                                 <h3>Assistant providers</h3>
                             </div>
                             <span class="offline-pill">
-                                <span class="status-dot is-offline" />
-                                Offline
+                                <span :class="['status-dot', { 'is-offline': intelligenceOffline }]" />
+                                {{ intelligenceOffline ? "Offline" : "Online" }}
                             </span>
                         </div>
 
-                        <div class="offline-callout">
+                        <div v-if="intelligenceOffline" class="offline-callout">
                             <UiAppIcon name="warning" :size="18" />
                             <div>
                                 <strong>Intelligence offline</strong>
@@ -51,18 +51,193 @@
                             </div>
                         </div>
 
-                        <article class="provider-card is-disabled">
+                        <p v-else-if="providerError" class="error-chip provider-feedback">{{ providerError }}</p>
+                        <p v-if="providerMessage" class="success-chip provider-feedback">{{ providerMessage }}</p>
+                        <p v-if="providersLoading" class="muted-copy">Loading providers...</p>
+
+                        <template v-if="providers.length">
+                            <article
+                                v-for="provider in providers"
+                                :key="provider.id"
+                                class="provider-card"
+                            >
+                                <div>
+                                    <h4>{{ provider.display_name || providerKindLabel(provider.kind) }}</h4>
+                                    <p>{{ providerKindLabel(provider.kind) }} · {{ providerModelLabel(provider) }}</p>
+                                    <small v-if="providerBaseUrl(provider)">{{ providerBaseUrl(provider) }}</small>
+                                </div>
+                                <button
+                                    class="icon-btn provider-delete"
+                                    type="button"
+                                    :disabled="providerDeletingId === provider.id"
+                                    aria-label="Remove provider"
+                                    @click="removeProvider(provider.id)"
+                                >
+                                    <UiAppIcon name="trash" :size="16" />
+                                </button>
+                            </article>
+                        </template>
+                        <article v-else :class="['provider-card', { 'is-disabled': intelligenceOffline }]">
                             <div>
                                 <h4>Configured providers</h4>
-                                <p>No provider data is available from Intelligence.</p>
+                                <p>
+                                    {{
+                                        intelligenceOffline
+                                            ? "No provider data is available from Intelligence."
+                                            : "No saved providers. The assistant can still use the default Ollama configuration."
+                                    }}
+                                </p>
                             </div>
                             <span class="toggle" aria-hidden="true" />
                         </article>
 
-                        <button class="btn btn-ghost add-provider" type="button" disabled>
+                        <button
+                            class="btn btn-ghost add-provider"
+                            type="button"
+                            :disabled="intelligenceOffline || providerSaving"
+                            @click="toggleProviderForm"
+                        >
                             <UiAppIcon name="plus" :size="16" />
-                            Add provider
+                            {{ showProviderForm ? "Cancel" : "Add provider" }}
                         </button>
+
+                        <form
+                            v-if="showProviderForm && !intelligenceOffline"
+                            class="provider-form"
+                            @submit.prevent="saveProvider"
+                        >
+                            <div class="provider-form-grid">
+                                <label class="form-label">
+                                    Provider type
+                                    <select v-model="providerForm.kind" class="provider-input">
+                                        <option
+                                            v-for="entry in providerCatalogOptions"
+                                            :key="entry.kind"
+                                            :value="entry.kind"
+                                        >
+                                            {{ entry.label }}
+                                        </option>
+                                    </select>
+                                </label>
+                                <label class="form-label">
+                                    Display name
+                                    <input
+                                        v-model.trim="providerForm.displayName"
+                                        class="input"
+                                        type="text"
+                                        placeholder="Local Ollama"
+                                    />
+                                </label>
+                            </div>
+
+                            <p v-if="selectedProviderDescription" class="muted-copy provider-form-copy">
+                                {{ selectedProviderDescription }}
+                            </p>
+
+                            <div class="provider-form-grid">
+                                <label class="form-label">
+                                    Base URL
+                                    <input
+                                        v-model.trim="providerForm.baseUrl"
+                                        class="input"
+                                        type="url"
+                                        :placeholder="
+                                            providerForm.kind === 'ollama'
+                                                ? 'http://127.0.0.1:11434'
+                                                : 'https://models.github.ai'
+                                        "
+                                    />
+                                </label>
+                                <label class="form-label">
+                                    Model
+                                    <input
+                                        v-model.trim="providerForm.model"
+                                        class="input"
+                                        type="text"
+                                        :placeholder="
+                                            providerForm.kind === 'ollama'
+                                                ? 'deepseek-r1:8b'
+                                                : 'openai/gpt-4.1'
+                                        "
+                                    />
+                                </label>
+                            </div>
+
+                            <label v-if="isGithubProviderForm" class="form-label">
+                                GitHub token
+                                <input
+                                    v-model.trim="providerForm.token"
+                                    class="input"
+                                    type="password"
+                                    autocomplete="off"
+                                    placeholder="Fine-grained PAT with models: read"
+                                />
+                            </label>
+
+                            <label v-if="isGithubProviderForm" class="form-label">
+                                API version
+                                <input
+                                    v-model.trim="providerForm.apiVersion"
+                                    class="input"
+                                    type="text"
+                                    placeholder="2022-11-28"
+                                />
+                            </label>
+
+                            <div class="provider-form-actions">
+                                <button
+                                    class="btn btn-secondary"
+                                    type="button"
+                                    :disabled="providerSaving"
+                                    @click="toggleProviderForm"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    class="btn btn-primary"
+                                    type="submit"
+                                    :disabled="providerSaving"
+                                >
+                                    {{ providerSaving ? "Saving..." : "Save provider" }}
+                                </button>
+                            </div>
+                        </form>
+
+                        <section class="assistant-preferences">
+                            <div class="assistant-preferences__header">
+                                <div>
+                                    <p class="pane-kicker">Prompting</p>
+                                    <h4>Super prompt</h4>
+                                </div>
+                                <span class="offline-pill">{{ superPrompt.length }}/12000</span>
+                            </div>
+
+                            <p class="muted-copy">
+                                Hidden system instructions injected into every assistant request.
+                            </p>
+
+                            <label class="form-label">
+                                Prompt
+                                <textarea
+                                    v-model="superPrompt"
+                                    class="textarea assistant-preferences__input"
+                                    rows="6"
+                                    maxlength="12000"
+                                    placeholder="Example: answer in English, prefer concise bullets, and cite note titles when using note context."
+                                />
+                            </label>
+
+                            <p v-if="superPromptMessage" class="success-chip provider-feedback">{{ superPromptMessage }}</p>
+
+                            <div class="provider-form-actions">
+                                <button class="btn btn-secondary" type="button" @click="clearSuperPrompt">
+                                    Clear
+                                </button>
+                                <button class="btn btn-primary" type="button" @click="saveSuperPromptSetting">
+                                    Save prompt
+                                </button>
+                            </div>
+                        </section>
                     </section>
 
                     <section v-else-if="activeSection === 'sessions'" class="settings-pane sessions-pane">
@@ -153,8 +328,12 @@
 </template>
 
 <script setup lang="ts">
+import type { IntelProvider, IntelProviderCatalogEntry } from "~/composables/useIntelChat";
+import { readSuperPrompt, writeSuperPrompt } from "~/composables/useIntelChat";
+
 const props = defineProps<{
     open: boolean;
+    intelligenceOffline?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -163,11 +342,30 @@ const emit = defineEmits<{
 }>();
 
 const store = useSessionStore();
+const intelApi = useIntelApi();
 const activeSection = ref<"providers" | "sessions" | "account">("providers");
 const confirmRevokeOthers = ref(false);
 const confirmSignOut = ref(false);
 const revokingOthers = ref(false);
 const othersMessage = ref("");
+const providers = ref<IntelProvider[]>([]);
+const providersLoading = ref(false);
+const providerError = ref("");
+const providerMessage = ref("");
+const providerCatalog = ref<IntelProviderCatalogEntry[]>([]);
+const providerSaving = ref(false);
+const providerDeletingId = ref("");
+const showProviderForm = ref(false);
+const superPrompt = ref("");
+const superPromptMessage = ref("");
+const providerForm = reactive({
+    kind: "ollama",
+    displayName: "Local Ollama",
+    baseUrl: "",
+    model: "",
+    token: "",
+    apiVersion: "",
+});
 
 const sections = [
     { id: "providers", label: "Assistant", icon: "agent" },
@@ -176,6 +374,31 @@ const sections = [
 ] as const;
 
 const otherSessionCount = computed(() => store.devices.filter((s) => !s.is_current).length);
+const fallbackProviderCatalog: IntelProviderCatalogEntry[] = [
+    {
+        kind: "ollama",
+        label: "Ollama",
+        description: "Local OpenAI-compatible endpoint.",
+    },
+    {
+        kind: "github_models",
+        label: "GitHub Models",
+        description: "Hosted GitHub Models inference with a token.",
+    },
+];
+const providerCatalogOptions = computed(() =>
+    providerCatalog.value.length ? providerCatalog.value : fallbackProviderCatalog,
+);
+const selectedProviderDescription = computed(
+    () =>
+        providerCatalogOptions.value.find((entry) => entry.kind === providerForm.kind)
+            ?.description ?? "",
+);
+const isGithubProviderForm = computed(
+    () =>
+        providerForm.kind === "github_models" ||
+        providerForm.kind === "github_copilot",
+);
 
 watch(
     () => props.open,
@@ -184,10 +407,190 @@ watch(
             confirmRevokeOthers.value = false;
             confirmSignOut.value = false;
             othersMessage.value = "";
+            providerError.value = "";
+            providerMessage.value = "";
+            superPromptMessage.value = "";
+            loadAssistantSettings();
             void store.load();
+            if (!props.intelligenceOffline) {
+                void loadProviders();
+            }
         }
     },
 );
+
+watch(
+    () => props.intelligenceOffline,
+    (offline) => {
+        if (offline) {
+            providers.value = [];
+            providersLoading.value = false;
+            providerError.value = "";
+            providerMessage.value = "";
+            return;
+        }
+        if (props.open) {
+            void loadProviders();
+        }
+    },
+);
+
+async function loadProviders() {
+    providersLoading.value = true;
+    providerError.value = "";
+    try {
+        const catalog = await intelApi.fetchIntelProviderCatalog();
+        providerCatalog.value = catalog.length
+            ? catalog
+            : fallbackProviderCatalog;
+        providers.value = await intelApi.fetchIntelProviders();
+    } catch (error: unknown) {
+        providers.value = [];
+        providerError.value = error instanceof Error ? error.message : "Could not load providers";
+    } finally {
+        providersLoading.value = false;
+    }
+}
+
+function providerKindLabel(kind: string): string {
+    return (
+        providerCatalogOptions.value.find((entry) => entry.kind === kind)?.label ??
+        kind
+    );
+}
+
+function providerModelLabel(provider: IntelProvider): string {
+    const model = provider.config?.model;
+    return typeof model === "string" && model.trim()
+        ? model
+        : provider.kind === "ollama"
+          ? "default Ollama model"
+          : "default model";
+}
+
+function providerBaseUrl(provider: IntelProvider): string {
+    const baseUrl = provider.config?.base_url;
+    return typeof baseUrl === "string" ? baseUrl : "";
+}
+
+function resetProviderForm() {
+    providerForm.kind = "ollama";
+    providerForm.displayName = "Local Ollama";
+    providerForm.baseUrl = "";
+    providerForm.model = "";
+    providerForm.token = "";
+    providerForm.apiVersion = "";
+}
+
+function loadAssistantSettings() {
+    superPrompt.value = readSuperPrompt();
+}
+
+function toggleProviderForm() {
+    showProviderForm.value = !showProviderForm.value;
+    providerError.value = "";
+    providerMessage.value = "";
+    if (showProviderForm.value) {
+        resetProviderForm();
+    }
+}
+
+function providerConfigFromForm(): Record<string, unknown> {
+    const config: Record<string, unknown> = {};
+    if (providerForm.baseUrl.trim()) {
+        config.base_url = providerForm.baseUrl.trim();
+    }
+    if (providerForm.model.trim()) {
+        config.model = providerForm.model.trim();
+    }
+    if (isGithubProviderForm.value) {
+        if (providerForm.token.trim()) {
+            config.token = providerForm.token.trim();
+        }
+        if (providerForm.apiVersion.trim()) {
+            config.api_version = providerForm.apiVersion.trim();
+        }
+    }
+    return config;
+}
+
+function saveSuperPromptSetting() {
+    writeSuperPrompt(superPrompt.value);
+    superPrompt.value = readSuperPrompt();
+    superPromptMessage.value = superPrompt.value.trim()
+        ? "Super prompt saved. It will be injected into every assistant request."
+        : "Super prompt cleared.";
+}
+
+function clearSuperPrompt() {
+    superPrompt.value = "";
+    saveSuperPromptSetting();
+}
+
+async function saveProvider() {
+    const displayName = providerForm.displayName.trim();
+    providerError.value = "";
+    providerMessage.value = "";
+
+    if (!displayName) {
+        providerError.value = "Provider name is required.";
+        return;
+    }
+    if (isGithubProviderForm.value && !providerForm.token.trim()) {
+        providerError.value = "GitHub Models providers require a token.";
+        return;
+    }
+
+    providerSaving.value = true;
+    try {
+        const created = await intelApi.createIntelProvider({
+            kind: providerForm.kind,
+            display_name: displayName,
+            config: providerConfigFromForm(),
+        });
+        providers.value = [created, ...providers.value];
+        providerMessage.value = "Provider added.";
+        showProviderForm.value = false;
+        resetProviderForm();
+        if (import.meta.client) {
+            window.dispatchEvent(
+                new CustomEvent("notalking:intel-providers-changed"),
+            );
+        }
+    } catch (error: unknown) {
+        providerError.value =
+            error instanceof Error ? error.message : "Could not save provider";
+    } finally {
+        providerSaving.value = false;
+    }
+}
+
+async function removeProvider(providerId: string) {
+    if (!confirm("Remove this provider?")) {
+        return;
+    }
+
+    providerDeletingId.value = providerId;
+    providerError.value = "";
+    providerMessage.value = "";
+    try {
+        await intelApi.deleteIntelProvider(providerId);
+        providers.value = providers.value.filter(
+            (provider) => provider.id !== providerId,
+        );
+        providerMessage.value = "Provider removed.";
+        if (import.meta.client) {
+            window.dispatchEvent(
+                new CustomEvent("notalking:intel-providers-changed"),
+            );
+        }
+    } catch (error: unknown) {
+        providerError.value =
+            error instanceof Error ? error.message : "Could not remove provider";
+    } finally {
+        providerDeletingId.value = "";
+    }
+}
 
 function formatIso(iso: string): string {
     try {
@@ -365,6 +768,13 @@ async function onRevokeOthers() {
     font-weight: 600;
 }
 
+.provider-card small {
+    display: block;
+    margin-top: 6px;
+    color: var(--text-disabled);
+    font-size: 12px;
+}
+
 .toggle {
     width: 42px;
     height: 24px;
@@ -373,6 +783,76 @@ async function onRevokeOthers() {
 }
 
 .add-provider {
+    margin-top: 16px;
+}
+
+.provider-feedback {
+    margin-bottom: 12px;
+}
+
+.provider-delete:hover:not(:disabled) {
+    color: var(--danger);
+}
+
+.provider-form {
+    margin-top: 16px;
+    border: 1px solid var(--bg-4);
+    border-radius: var(--r-card);
+    background: var(--bg-3);
+    padding: 16px;
+}
+
+.assistant-preferences {
+    margin-top: 20px;
+    border: 1px solid var(--bg-4);
+    border-radius: var(--r-card);
+    background: var(--bg-3);
+    padding: 16px;
+}
+
+.assistant-preferences__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+
+.assistant-preferences__header h4 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.assistant-preferences__input {
+    min-height: 132px;
+}
+
+.provider-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.provider-form-copy {
+    margin: 12px 0;
+}
+
+.provider-input {
+    width: 100%;
+    border: 1px solid var(--bg-3);
+    border-radius: var(--r-input);
+    background: var(--bg-4);
+    color: var(--text-primary);
+    min-height: 40px;
+    padding: 0 12px;
+}
+
+.provider-form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
     margin-top: 16px;
 }
 
@@ -558,7 +1038,10 @@ async function onRevokeOthers() {
     }
 
     .pane-heading,
-    .session-row {
+    .assistant-preferences__header,
+    .session-row,
+    .provider-form-grid,
+    .provider-form-actions {
         align-items: stretch;
         flex-direction: column;
     }

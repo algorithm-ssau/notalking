@@ -5,8 +5,8 @@ use sqlx::Row;
 use uuid::Uuid;
 
 use crate::db::Db;
-use crate::user::repo::{CreateUser, Repo, UpdateUser, UserRepoError};
 use crate::user::User;
+use crate::user::repo::{CreateUser, Repo, UpdateUser, UserRepoError};
 
 #[derive(Clone)]
 pub struct SqlUserRepo {
@@ -34,9 +34,15 @@ impl SqlUserRepo {
         Ok(User {
             id,
             login: row.try_get("login").map_err(|_| UserRepoError::Internal)?,
-            password_hash: row.try_get("password_hash").map_err(|_| UserRepoError::Internal)?,
-            created_at: row.try_get("created_at").map_err(|_| UserRepoError::Internal)?,
-            updated_at: row.try_get("updated_at").map_err(|_| UserRepoError::Internal)?,
+            password_hash: row
+                .try_get("password_hash")
+                .map_err(|_| UserRepoError::Internal)?,
+            created_at: row
+                .try_get("created_at")
+                .map_err(|_| UserRepoError::Internal)?,
+            updated_at: row
+                .try_get("updated_at")
+                .map_err(|_| UserRepoError::Internal)?,
         })
     }
 
@@ -44,9 +50,15 @@ impl SqlUserRepo {
         Ok(User {
             id: row.try_get("id").map_err(|_| UserRepoError::Internal)?,
             login: row.try_get("login").map_err(|_| UserRepoError::Internal)?,
-            password_hash: row.try_get("password_hash").map_err(|_| UserRepoError::Internal)?,
-            created_at: row.try_get("created_at").map_err(|_| UserRepoError::Internal)?,
-            updated_at: row.try_get("updated_at").map_err(|_| UserRepoError::Internal)?,
+            password_hash: row
+                .try_get("password_hash")
+                .map_err(|_| UserRepoError::Internal)?,
+            created_at: row
+                .try_get("created_at")
+                .map_err(|_| UserRepoError::Internal)?,
+            updated_at: row
+                .try_get("updated_at")
+                .map_err(|_| UserRepoError::Internal)?,
         })
     }
 }
@@ -146,14 +158,16 @@ impl Repo for SqlUserRepo {
         let updated_at = patch.updated_at;
         match &*self.db {
             Db::Sqlite(pool) => {
-                sqlx::query("UPDATE users SET login = ?, password_hash = ?, updated_at = ? WHERE id = ?")
-                    .bind(&login)
-                    .bind(&password_hash)
-                    .bind(updated_at)
-                    .bind(id.to_string())
-                    .execute(pool)
-                    .await
-                    .map_err(Self::map_err)?;
+                sqlx::query(
+                    "UPDATE users SET login = ?, password_hash = ?, updated_at = ? WHERE id = ?",
+                )
+                .bind(&login)
+                .bind(&password_hash)
+                .bind(updated_at)
+                .bind(id.to_string())
+                .execute(pool)
+                .await
+                .map_err(Self::map_err)?;
             }
             Db::Postgres(pool) => {
                 sqlx::query("UPDATE users SET login = $1, password_hash = $2, updated_at = $3 WHERE id = $4")

@@ -6,7 +6,8 @@ use editor::content::Content;
 use uuid::Uuid;
 
 use crate::note::{
-    CreateNoteInput, DeleteNoteInput, Note, NoteError, NoteUsecase, TextPatch, blocks::LoadedNoteBlocks,
+    CreateNoteInput, DeleteNoteInput, Note, NoteError, NoteUsecase, TextPatch,
+    blocks::LoadedNoteBlocks,
 };
 
 use super::block_repo::BlockRepository;
@@ -50,7 +51,11 @@ where
         LoadedNoteBlocks::from_raw(raw)
     }
 
-    async fn persist_loaded(&self, mut note: Note, loaded: LoadedNoteBlocks) -> Result<(), NoteError> {
+    async fn persist_loaded(
+        &self,
+        mut note: Note,
+        loaded: LoadedNoteBlocks,
+    ) -> Result<(), NoteError> {
         note.head_id = loaded.head_id;
         note.updated_at = Utc::now();
         let raw = loaded.into_raw()?;
@@ -104,11 +109,7 @@ where
         self.repo.delete_by_id(input.note_id).await
     }
 
-    async fn list_blocks(
-        &self,
-        user_id: Uuid,
-        note_id: Uuid,
-    ) -> Result<Vec<Block<()>>, NoteError> {
+    async fn list_blocks(&self, user_id: Uuid, note_id: Uuid) -> Result<Vec<Block<()>>, NoteError> {
         self.ensure_note_owner(user_id, note_id).await?;
         let loaded = self.load_blocks(note_id).await?;
         Ok(loaded.ordered_blocks().into_iter().cloned().collect())
@@ -125,11 +126,7 @@ where
         let now = Utc::now();
         let mut loaded = self.load_blocks(note_id).await?;
         let id = loaded.insert_block_after(after_id, content, now)?;
-        let created = loaded
-            .blocks
-            .get(&id)
-            .cloned()
-            .ok_or(NoteError::Internal)?;
+        let created = loaded.blocks.get(&id).cloned().ok_or(NoteError::Internal)?;
         self.persist_loaded(note, loaded).await?;
         Ok(created)
     }
@@ -190,16 +187,12 @@ where
                 position,
                 direction,
             } => tb.delete_at(position, direction),
-            TextPatch::EnableFormatting {
-                start,
-                end,
-                style,
-            } => tb.enable_formatting(start, end, style),
-            TextPatch::DisableFormatting {
-                start,
-                end,
-                style,
-            } => tb.disable_formatting(start, end, style),
+            TextPatch::EnableFormatting { start, end, style } => {
+                tb.enable_formatting(start, end, style)
+            }
+            TextPatch::DisableFormatting { start, end, style } => {
+                tb.disable_formatting(start, end, style)
+            }
         }
         self.persist_loaded(note, loaded).await?;
         Ok(())

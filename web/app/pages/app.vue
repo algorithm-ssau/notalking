@@ -135,12 +135,21 @@
                     <button class="icon-btn mobile-only agent-close" type="button" aria-label="Close assistant" @click="activeOverlay = null">
                         <UiAppIcon name="close" :size="18" />
                     </button>
-                    <AgentPanel :offline="true" />
+                    <AgentPanel
+                        :offline="intelligenceOffline"
+                        :note-id="resolvedNoteId || undefined"
+                        @note-created="onAgentNoteCreated"
+                    />
                 </div>
             </aside>
         </section>
 
-        <SettingsModal :open="settingsOpen" @close="settingsOpen = false" @logout="logout" />
+        <SettingsModal
+            :open="settingsOpen"
+            :intelligence-offline="intelligenceOffline"
+            @close="settingsOpen = false"
+            @logout="logout"
+        />
         <SemanticSearchDialog
             :open="searchOpen"
             :notes="notes"
@@ -156,6 +165,7 @@ import { getCoreErrorMessage } from "~/utils/coreErrors";
 
 const api = useCoreApi();
 const sessionStore = useSessionStore();
+const { offline: intelligenceOffline } = useIntelligenceStatus();
 const NOTES_COLLAPSED_KEY = "notalking:dashboard-notes-collapsed:v2";
 const AGENT_COLLAPSED_KEY = "notalking:dashboard-agent-collapsed:v2";
 
@@ -325,6 +335,15 @@ async function createNote() {
         }
     } catch (e: unknown) {
         loadError.value = getCoreErrorMessage(e, "Could not create note");
+    }
+}
+
+async function onAgentNoteCreated(payload: { noteId: string; title: string }) {
+    notesPage.value = 1;
+    await refreshNotes(1);
+    selectedNoteId.value = payload.noteId;
+    if (isCompact.value) {
+        activeOverlay.value = null;
     }
 }
 
@@ -766,6 +785,9 @@ onUnmounted(() => {
 
 .agent-content {
     position: relative;
+    display: grid;
+    min-height: 0;
+    height: 100%;
 }
 
 .agent-close {
@@ -842,9 +864,13 @@ onUnmounted(() => {
         display: none;
     }
 
-    .notes-panel .panel-content,
-    .agent-shell .panel-content {
+    .notes-panel .panel-content {
         display: block;
+    }
+
+    .agent-shell .panel-content {
+        display: grid;
+        min-height: 0;
     }
 
     .mobile-only {

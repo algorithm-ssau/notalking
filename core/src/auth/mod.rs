@@ -112,7 +112,11 @@ pub trait SessionRepo {
         updated_at: DateTime<Utc>,
     ) -> Result<(), AuthError>;
 
-    async fn revoke_session(&self, session_id: Uuid, revoked_at: DateTime<Utc>) -> Result<(), AuthError>;
+    async fn revoke_session(
+        &self,
+        session_id: Uuid,
+        revoked_at: DateTime<Utc>,
+    ) -> Result<(), AuthError>;
 
     async fn list_sessions_by_user(&self, user_id: Uuid) -> Result<Vec<Session>, AuthError>;
 
@@ -140,11 +144,17 @@ pub trait AuthUsecase {
     async fn register(&self, input: RegisterInput) -> Result<SessionView, AuthError>;
     async fn login(&self, input: LoginInput) -> Result<SessionView, AuthError>;
     async fn logout(&self, input: LogoutInput) -> Result<(), AuthError>;
-    async fn list_sessions(&self, input: ListSessionsInput) -> Result<Vec<ManagedSessionView>, AuthError>;
+    async fn list_sessions(
+        &self,
+        input: ListSessionsInput,
+    ) -> Result<Vec<ManagedSessionView>, AuthError>;
     async fn close_session(&self, input: CloseSessionInput) -> Result<(), AuthError>;
     async fn close_other_sessions(&self, input: CloseOtherSessionsInput) -> Result<u64, AuthError>;
     /// Validates the session, applies sliding-window expiry refresh, returns identity and fresh cookie view.
-    async fn authorize_session(&self, session_id: Uuid) -> Result<(AuthorizedSession, SessionView), AuthError>;
+    async fn authorize_session(
+        &self,
+        session_id: Uuid,
+    ) -> Result<(AuthorizedSession, SessionView), AuthError>;
 }
 
 pub enum AuthTraceStep {

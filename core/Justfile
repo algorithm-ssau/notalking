@@ -5,7 +5,9 @@ default:
 
 # Default SQLite under `core/data/` (path is resolved to the crate root, not your shell cwd).
 run:
-    RUST_LOG="${RUST_LOG:-info}" cargo run
+    RUST_LOG="${RUST_LOG:-info}" \
+    CORE_GRPC_BIND="${CORE_GRPC_BIND:-127.0.0.1:50051}" \
+    cargo run
 
 # Use when Docker Compose is up: same env defaults as the repo-root `just run` (Ollama embeddings).
 run-with-compose:
@@ -15,6 +17,7 @@ run-with-compose:
     QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
     QDRANT_COLLECTION="${QDRANT_COLLECTION:-notalking_embed_ollama}" \
     NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}" \
+    CORE_GRPC_BIND="${CORE_GRPC_BIND:-127.0.0.1:50051}" \
     EMBEDDING_PROVIDER_URL="${EMBEDDING_PROVIDER_URL:-http://127.0.0.1:11434/v1}" \
     EMBEDDING_MODEL="${EMBEDDING_MODEL:-nomic-embed-text-v2-moe}" \
     CORE_EMBEDDING_VECTOR_DIMENSIONS="${CORE_EMBEDDING_VECTOR_DIMENSIONS:-768}" \

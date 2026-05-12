@@ -109,12 +109,7 @@ where
         let expires_at = now + Duration::hours(self.session_ttl_hours);
         let session = self
             .session_repo
-            .create_session(
-                user.id,
-                expires_at,
-                &input.device,
-                &input.location,
-            )
+            .create_session(user.id, expires_at, &input.device, &input.location)
             .await?;
 
         Ok(Self::to_session_view(&session))
@@ -143,12 +138,7 @@ where
         let expires_at = now + Duration::hours(self.session_ttl_hours);
         let session = self
             .session_repo
-            .create_session(
-                user.id,
-                expires_at,
-                &input.device,
-                &input.location,
-            )
+            .create_session(user.id, expires_at, &input.device, &input.location)
             .await?;
 
         Ok(Self::to_session_view(&session))
@@ -225,7 +215,10 @@ where
             .await
     }
 
-    async fn authorize_session(&self, session_id: Uuid) -> Result<(AuthorizedSession, SessionView), AuthError> {
+    async fn authorize_session(
+        &self,
+        session_id: Uuid,
+    ) -> Result<(AuthorizedSession, SessionView), AuthError> {
         let session = self.resolve_current_session(session_id).await?;
         let now = Utc::now();
         let new_expires = now + Duration::hours(self.session_ttl_hours);

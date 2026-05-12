@@ -154,7 +154,10 @@ fn parse_socket(s: &str) -> Option<SocketAddr> {
 }
 
 fn env_trim(key: &str) -> Option<String> {
-    std::env::var(key).ok().map(|v| v.trim().to_owned()).filter(|v| !v.is_empty())
+    std::env::var(key)
+        .ok()
+        .map(|v| v.trim().to_owned())
+        .filter(|v| !v.is_empty())
 }
 
 impl CoreConfig {
@@ -257,10 +260,7 @@ impl CoreConfig {
 
         let embedding_vector_dimensions = cli
             .embedding_vector_dimensions
-            .or_else(|| {
-                env_trim("CORE_EMBEDDING_VECTOR_DIMENSIONS")
-                    .and_then(|s| s.parse().ok())
-            })
+            .or_else(|| env_trim("CORE_EMBEDDING_VECTOR_DIMENSIONS").and_then(|s| s.parse().ok()))
             .unwrap_or(default.embedding_vector_dimensions);
 
         let embedding_query_prefix = cli
@@ -304,11 +304,15 @@ impl CoreConfig {
 
         let cookie_secure = cli
             .cookie_secure
-            .or_else(|| std::env::var("CORE_COOKIE_SECURE").ok().and_then(|v| match v.to_lowercase().as_str() {
-                "1" | "true" | "yes" => Some(true),
-                "0" | "false" | "no" => Some(false),
-                _ => None,
-            }))
+            .or_else(|| {
+                std::env::var("CORE_COOKIE_SECURE").ok().and_then(|v| {
+                    match v.to_lowercase().as_str() {
+                        "1" | "true" | "yes" => Some(true),
+                        "0" | "false" | "no" => Some(false),
+                        _ => None,
+                    }
+                })
+            })
             .unwrap_or(matches!(environment, Environment::Prod));
 
         let log_filter = cli
@@ -320,10 +324,12 @@ impl CoreConfig {
         let mcp_enabled = cli
             .mcp_enabled
             .or_else(|| {
-                std::env::var("CORE_MCP_ENABLED").ok().and_then(|v| match v.to_lowercase().as_str() {
-                    "0" | "false" | "no" => Some(false),
-                    "1" | "true" | "yes" => Some(true),
-                    _ => None,
+                std::env::var("CORE_MCP_ENABLED").ok().and_then(|v| {
+                    match v.to_lowercase().as_str() {
+                        "0" | "false" | "no" => Some(false),
+                        "1" | "true" | "yes" => Some(true),
+                        _ => None,
+                    }
                 })
             })
             .unwrap_or(default.mcp_enabled);

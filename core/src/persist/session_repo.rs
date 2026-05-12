@@ -163,26 +163,34 @@ impl SessionRepo for SqlSessionRepo {
         Ok(())
     }
 
-    async fn revoke_session(&self, session_id: Uuid, revoked_at: DateTime<Utc>) -> Result<(), AuthError> {
+    async fn revoke_session(
+        &self,
+        session_id: Uuid,
+        revoked_at: DateTime<Utc>,
+    ) -> Result<(), AuthError> {
         match &*self.db {
             Db::Sqlite(pool) => {
-                let r = sqlx::query("UPDATE sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL")
-                    .bind(revoked_at)
-                    .bind(session_id.to_string())
-                    .execute(pool)
-                    .await
-                    .map_err(Self::map_err)?;
+                let r = sqlx::query(
+                    "UPDATE sessions SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+                )
+                .bind(revoked_at)
+                .bind(session_id.to_string())
+                .execute(pool)
+                .await
+                .map_err(Self::map_err)?;
                 if r.rows_affected() == 0 {
                     return Err(AuthError::SessionNotFound);
                 }
             }
             Db::Postgres(pool) => {
-                let r = sqlx::query("UPDATE sessions SET revoked_at = $1 WHERE id = $2 AND revoked_at IS NULL")
-                    .bind(revoked_at)
-                    .bind(session_id)
-                    .execute(pool)
-                    .await
-                    .map_err(Self::map_err)?;
+                let r = sqlx::query(
+                    "UPDATE sessions SET revoked_at = $1 WHERE id = $2 AND revoked_at IS NULL",
+                )
+                .bind(revoked_at)
+                .bind(session_id)
+                .execute(pool)
+                .await
+                .map_err(Self::map_err)?;
                 if r.rows_affected() == 0 {
                     return Err(AuthError::SessionNotFound);
                 }

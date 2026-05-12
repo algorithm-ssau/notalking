@@ -47,7 +47,10 @@ impl Db {
         Ok(Db::Sqlite(pool))
     }
 
-    pub async fn run_migrations_from_crate_root(&self, crate_dir: &std::path::Path) -> Result<(), sqlx::migrate::MigrateError> {
+    pub async fn run_migrations_from_crate_root(
+        &self,
+        crate_dir: &std::path::Path,
+    ) -> Result<(), sqlx::migrate::MigrateError> {
         let sqlite = crate_dir.join("migrations/sqlite");
         let postgres = crate_dir.join("migrations/postgres");
         match self {

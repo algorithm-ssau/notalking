@@ -70,6 +70,7 @@ When `REDIS_URL` is set, limits use Redis; otherwise an in-memory limiter is use
 |--------|------|------|---------|
 | **POST** | `/auth/register` | `{ "login": string, "password": string }` | **201** + JSON session + `Set-Cookie` |
 | **POST** | `/auth/login` | Same as register | **200** + JSON session + `Set-Cookie` |
+| **GET** | `/auth/me` | _(cookie)_ | **200** `{ "user_id": string, "session_id": string }` + refreshed cookie -- identity for trusted forwards (e.g. Intelligence) |
 | **POST** | `/auth/logout` | _(cookie only)_ | **204** + cleared cookie |
 | **GET** | `/auth/sessions` | _(cookie)_ | **200** `{ "sessions": [...] }` + refreshed cookie |
 | **DELETE** | `/auth/sessions/{session_id}` | _(cookie)_ | **204** (close another session) + refreshed cookie |
@@ -159,6 +160,8 @@ When **`CORE_MCP_ENABLED`** is true (default), the MCP transport is mounted at *
 | **Prometheus metrics** | Optional **`CORE_METRICS_BIND`** (default in code **`0.0.0.0:40001`** when enabled in defaults). |
 | **gRPC** | Optional **`CORE_GRPC_BIND`** -- CoreBridge service when set. |
 
+CoreBridge is the private synchronous contract used by Intelligence. It exposes health, current-note metadata, lexical/semantic note search, bounded note content retrieval, and explicit note creation through [`../common/proto/notalking/v1/core.proto`](../common/proto/notalking/v1/core.proto). Search works without Qdrant by matching titles and block text; when embeddings are configured, semantic hits are merged into the same response.
+
 ---
 
 ## Configuration reference (CLI / env)
@@ -173,7 +176,7 @@ Precedence: **CLI flags > environment variables > compiled defaults**. Common va
 | `REDIS_URL` | Redis for rate limiting |
 | `QDRANT_URL` / `QDRANT_COLLECTION` | Vector search (**gRPC**, default local **`http://127.0.0.1:6334`** -- not the REST port 6333) |
 | `NATS_URL` | Optional NATS |
-| `CORE_GRPC_BIND` | Optional gRPC server |
+| `CORE_GRPC_BIND` | Optional gRPC server; local Justfile defaults to `127.0.0.1:50051` |
 | `EMBEDDING_PROVIDER_URL` / `EMBEDDING_MODEL` / `CORE_EMBEDDING_*` | Embeddings pipeline |
 | `EMBEDDING_QUERY_PREFIX` / `EMBEDDING_DOCUMENT_PREFIX` | Optional prefixes for asymmetric retrieval (e.g. Nomic **`search_query: `** / **`search_document: `**); empty for symmetric models like OpenAI |
 | `CORE_CORS_ORIGINS` | Comma-separated origins for CORS |

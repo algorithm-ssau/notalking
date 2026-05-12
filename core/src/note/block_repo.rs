@@ -41,7 +41,9 @@ impl RawBlockDocument {
             serde_json::from_str(s).map_err(|_| NoteError::CorruptBlocks)?;
         let mut blocks = HashMap::new();
         for (id, b64) in dto.blocks {
-            let bytes = engine.decode(b64.as_bytes()).map_err(|_| NoteError::CorruptBlocks)?;
+            let bytes = engine
+                .decode(b64.as_bytes())
+                .map_err(|_| NoteError::CorruptBlocks)?;
             blocks.insert(id, bytes);
         }
         Ok(RawBlockDocument {

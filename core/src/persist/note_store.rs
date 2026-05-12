@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use sqlx::Row;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::db::Db;

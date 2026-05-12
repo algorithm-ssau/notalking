@@ -37,7 +37,9 @@ impl RateLimiterHandle {
                             window_secs: 60,
                         });
                     }
-                    Err(e) => tracing::warn!(error = %e, "redis connection failed for rate limiting"),
+                    Err(e) => {
+                        tracing::warn!(error = %e, "redis connection failed for rate limiting")
+                    }
                 },
                 Err(e) => tracing::warn!(error = %e, "invalid redis URL for rate limiting"),
             }
@@ -103,11 +105,7 @@ impl RedisRateLimiter {
     async fn allow(&self, key: &str) -> bool {
         let mut conn = self.client.clone();
         let k = format!("rl:core:{key}");
-        let n: i64 = match redis::cmd("INCR")
-            .arg(&k)
-            .query_async(&mut conn)
-            .await
-        {
+        let n: i64 = match redis::cmd("INCR").arg(&k).query_async(&mut conn).await {
             Ok(n) => n,
             Err(_) => return true,
         };
@@ -144,10 +142,7 @@ pub async fn global_rate_limit(
         let retry = HeaderValue::from_static("60");
         return (
             StatusCode::TOO_MANY_REQUESTS,
-            [(
-                axum::http::header::RETRY_AFTER,
-                retry,
-            )],
+            [(axum::http::header::RETRY_AFTER, retry)],
             Json(RateLimitErrorResponse {
                 code: "rate_limited",
                 message: "too many requests, try again later".to_owned(),
@@ -175,10 +170,7 @@ pub async fn auth_rate_limit(
         let retry = HeaderValue::from_static("60");
         return (
             StatusCode::TOO_MANY_REQUESTS,
-            [(
-                axum::http::header::RETRY_AFTER,
-                retry,
-            )],
+            [(axum::http::header::RETRY_AFTER, retry)],
             Json(RateLimitErrorResponse {
                 code: "rate_limited",
                 message: "too many requests, try again later".to_owned(),

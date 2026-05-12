@@ -1,15 +1,42 @@
-import { proxyRequest } from "h3";
+import { proxyRequest, type H3Event } from "h3";
 
 export default defineEventHandler(async (event) => {
     const path = getRequestURL(event).pathname;
-    if (!path.startsWith("/core/")) {
+    const target = proxyTarget(event, path);
+    if (!target) {
         return;
     }
 
-    const config = useRuntimeConfig(event);
-    const base = config.coreApiUrl.replace(/\/$/, "");
-    const sub = path.slice("/core".length) || "/";
-    const target = `${base}${sub}${getRequestURL(event).search}`;
-
     return proxyRequest(event, target);
 });
+
+function proxyTarget(event: H3Event, path: string): string | null {
+    const config = useRuntimeConfig(event);
+    const currentUrl = getRequestURL(event);
+
+    if (path === "/core" || path.startsWith("/core/")) {
+        return buildTarget(config.coreApiUrl, path, "/core", currentUrl.search);
+    }
+
+    if (path === "/intel" || path.startsWith("/intel/")) {
+        return buildTarget(
+            config.intelligenceApiUrl,
+            path,
+            "/intel",
+            currentUrl.search,
+        );
+    }
+
+    return null;
+}
+
+function buildTarget(
+    baseUrl: string,
+    path: string,
+    prefix: string,
+    search: string,
+): string {
+    const base = baseUrl.replace(/\/$/, "");
+    const sub = path.slice(prefix.length) || "/";
+    return `${base}${sub}${search}`;
+}

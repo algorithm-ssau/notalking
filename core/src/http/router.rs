@@ -8,10 +8,11 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 
 use super::{
     handlers::{
-        close_other_sessions_handler, close_session_handler, create_note_block_handler, create_note_handler,
-        delete_note_block_handler, delete_note_handler, health_handler, list_note_blocks_handler,
-        list_notes_handler, list_sessions_handler, login_handler, logout_handler, patch_note_block_handler,
-        register_handler, semantic_search_handler,
+        close_other_sessions_handler, close_session_handler, create_note_block_handler,
+        create_note_handler, delete_note_block_handler, delete_note_handler, health_handler,
+        list_note_blocks_handler, list_notes_handler, list_sessions_handler, login_handler,
+        logout_handler, me_handler, patch_note_block_handler, register_handler,
+        semantic_search_handler,
     },
     logging::request_logging_middleware,
     rate_limit::{auth_rate_limit, global_rate_limit},
@@ -22,6 +23,7 @@ fn create_auth_router(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/register", post(register_handler))
         .route("/login", post(login_handler))
+        .route("/me", get(me_handler))
         .route("/logout", post(logout_handler))
         .route("/sessions", get(list_sessions_handler))
         .route("/sessions/others", delete(close_other_sessions_handler))
@@ -43,7 +45,10 @@ fn protected_api_router(state: AppState) -> Router<AppState> {
             delete(delete_note_block_handler).patch(patch_note_block_handler),
         )
         .route("/search/semantic", post(semantic_search_handler))
-        .route_layer(middleware::from_fn_with_state(state.clone(), global_rate_limit))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            global_rate_limit,
+        ))
 }
 
 pub fn create_http_router(state: AppState) -> Router {

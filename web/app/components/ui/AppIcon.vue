@@ -5,6 +5,7 @@
 <script setup lang="ts">
 import {
     IconAiAgent,
+    IconArrowUp,
     IconBlockquote,
     IconChevronDown,
     IconX,
@@ -16,7 +17,6 @@ import {
     IconPencil,
     IconPlus,
     IconSearch,
-    IconSend,
     IconSettings,
     IconShield,
     IconTrash,
@@ -37,7 +37,7 @@ const iconMap: Record<string, any> = {
     pen: IconPencil,
     plus: IconPlus,
     search: IconSearch,
-    send: IconSend,
+    send: IconArrowUp,
     settings: IconSettings,
     shield: IconShield,
     trash: IconTrash,

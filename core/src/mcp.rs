@@ -19,8 +19,8 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::auth::{AuthUsecase, LogoutInput};
-use crate::note::{CreateNoteInput, DeleteNoteInput, NoteUsecase};
 use crate::http::state::AppState;
+use crate::note::{CreateNoteInput, DeleteNoteInput, NoteUsecase};
 
 #[derive(Clone)]
 pub struct NotalkingMcp {
@@ -56,9 +56,8 @@ fn session_id_from_parts(parts: &Parts) -> Result<Uuid, McpError> {
         for item in cookie_header.split(';') {
             let item = item.trim();
             if let Some(value) = item.strip_prefix("session_id=") {
-                return Uuid::parse_str(value).map_err(|_| {
-                    McpError::invalid_params("invalid session_id cookie", None)
-                });
+                return Uuid::parse_str(value)
+                    .map_err(|_| McpError::invalid_params("invalid session_id cookie", None));
             }
         }
     }
@@ -101,10 +100,7 @@ struct CreateNoteParams {
 #[tool_router]
 impl NotalkingMcp {
     #[tool(description = "List the signed-in user's notes (id and title).")]
-    async fn list_notes(
-        &self,
-        Extension(parts): Extension<Parts>,
-    ) -> Result<String, McpError> {
+    async fn list_notes(&self, Extension(parts): Extension<Parts>) -> Result<String, McpError> {
         let uid = self.user_id(&parts).await?;
         let notes = self
             .state
@@ -273,8 +269,7 @@ impl ServerHandler for NotalkingMcp {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
             instructions: Some(
-                "Notalking Core MCP: send the same session_id cookie as browser REST calls."
-                    .into(),
+                "Notalking Core MCP: send the same session_id cookie as browser REST calls.".into(),
             ),
             capabilities: ServerCapabilities::builder().enable_tools().build(),
             ..Default::default()

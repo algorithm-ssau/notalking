@@ -12,25 +12,18 @@ export default defineNuxtConfig({
                     content: "Structured notes with optional AI context.",
                 },
             ],
-            link: [
-                {
-                    rel: "preconnect",
-                    href: "https://fonts.googleapis.com",
-                },
-                {
-                    rel: "preconnect",
-                    href: "https://fonts.gstatic.com",
-                    crossorigin: "",
-                },
-                {
-                    rel: "stylesheet",
-                    href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap",
-                },
-            ],
         },
     },
     runtimeConfig: {
         coreApiUrl: process.env.NUXT_CORE_API_URL || "http://127.0.0.1:40000",
+        intelligenceApiUrl:
+            process.env.NUXT_INTELLIGENCE_API_URL ||
+            process.env.NUXT_PUBLIC_INTELLIGENCE_PROXY_TARGET ||
+            "http://127.0.0.1:41000",
+        public: {
+            intelligenceApiUrl:
+                process.env.NUXT_PUBLIC_INTELLIGENCE_API_URL || "/intel",
+        },
     },
     modules: ["@pinia/nuxt"],
     css: ["~/assets/styles/main.css"],
@@ -39,9 +32,18 @@ export default defineNuxtConfig({
         server: {
             proxy: {
                 "/core": {
-                    target: process.env.NUXT_CORE_API_URL || "http://127.0.0.1:40000",
+                    target:
+                        process.env.NUXT_CORE_API_URL ||
+                        "http://127.0.0.1:40000",
                     changeOrigin: true,
                     rewrite: (path) => path.replace(/^\/core/, "") || "/",
+                },
+                "/intel": {
+                    target:
+                        process.env.NUXT_PUBLIC_INTELLIGENCE_PROXY_TARGET ||
+                        "http://127.0.0.1:41000",
+                    changeOrigin: true,
+                    rewrite: (path) => path.replace(/^\/intel/, "") || "/",
                 },
             },
         },
