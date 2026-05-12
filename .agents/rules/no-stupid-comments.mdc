@@ -1,0 +1,45 @@
+---
+description: Avoid unnecessary and obvious code comments
+alwaysApply: true
+---
+
+# Comment Guidelines
+
+Write self-documenting code. Avoid comments that add no value.
+
+## Don't Write
+
+```typescript
+// ❌ Obvious - restates the code
+i++; // increment i
+
+// ❌ Explains "what" not "why"
+const user = getUser(id); // get user by id
+
+// ❌ Excessive
+// This function calculates the sum
+// It takes two numbers as parameters
+// And returns their sum
+function add(a, b) { return a + b; }
+```
+
+## Do Write
+
+```typescript
+// ✅ Explains non-obvious "why"
+// Skip validation for admin users to allow bulk operations
+if (user.isAdmin) return true;
+
+// ✅ Documents complex business logic
+// Price tiers: 0-100 units = base, 101-500 = 10% off, 500+ = 25% off
+
+// ✅ Warns about gotchas
+// IMPORTANT: Order matters - auth middleware must run before rate limiting
+```
+
+## Principles
+
+- Code should be readable without comments
+- Comment the "why", never the "what"
+- If you need to explain what code does, refactor it instead
+- Good names > explanatory comments

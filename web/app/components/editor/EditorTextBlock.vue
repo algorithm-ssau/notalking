@@ -1,32 +1,39 @@
 <template>
-    <div class="flex min-w-0 flex-1 items-start gap-1">
+    <div
+        :class="[
+            'editor-block group',
+            {
+                'is-dragging': isDragging,
+                'is-active': isFocused,
+                'is-empty': plainFromBlock().length === 0,
+            },
+        ]"
+        :data-block-id="block.id"
+    >
         <button
             type="button"
-            class="mt-0.5 flex h-6 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded text-fg-muted opacity-0 transition-opacity hover:bg-bg-overlay hover:text-fg-secondary active:cursor-grabbing group-hover:opacity-100"
+            class="drag-handle"
             draggable="true"
-            aria-label="Переместить блок"
+            aria-label="Move block"
             @dragstart="onHandleDragStart"
             @click.prevent
         >
-            <span class="text-xs leading-none tracking-tighter">⋮⋮</span>
+            <span>⋮⋮</span>
         </button>
         <div
-            class="min-w-0 flex-1 rounded-md px-2 py-1 transition-colors"
-            :class="isDragging ? 'bg-bg-overlay/50' : 'hover:bg-bg-overlay/40'"
-        >
-            <div
-                ref="editableRef"
-                class="editor-text whitespace-pre-wrap break-words text-fg-primary outline-none"
-                contenteditable="true"
-                spellcheck="false"
-                @input="onEditorInput"
-                @blur="onBlur"
-                @compositionstart="isComposing = true"
-                @compositionend="onCompositionEnd"
-                @mouseup="reportSelection"
-                @keyup="reportSelection"
-            />
-        </div>
+            ref="editableRef"
+            class="editor-text"
+            contenteditable="true"
+            spellcheck="false"
+            @click="onEditorClick"
+            @focus="isFocused = true"
+            @input="onEditorInput"
+            @blur="onBlur"
+            @compositionstart="isComposing = true"
+            @compositionend="onCompositionEnd"
+            @mouseup="reportSelection"
+            @keyup="reportSelection"
+        />
     </div>
 </template>
 
@@ -52,6 +59,7 @@ const emit = defineEmits<{
 const api = useCoreApi();
 const editableRef = ref<HTMLElement | null>(null);
 const isComposing = ref(false);
+const isFocused = ref(false);
 const dirty = ref(false);
 const lastSyncedPlain = ref("");
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -90,7 +98,9 @@ function collectTextFromEditor(root: HTMLElement): string {
 }
 
 function plainFromBlock(): string {
-    return normalizePlain(plainFromChunks(getTextContent(props.block.content)?.chunks ?? []));
+    return normalizePlain(
+        plainFromChunks(getTextContent(props.block.content)?.chunks ?? []),
+    );
 }
 
 function escapeHtml(text: string) {
@@ -123,12 +133,15 @@ function syncDomFromChunks() {
     const tc = getTextContent(props.block.content);
     const chunks = tc?.chunks ?? [];
     if (chunks.length === 0 || (chunks.length === 1 && chunks[0].text === "")) {
-        el.innerHTML = '<span class="text-fg-muted">&#x200b;</span>';
+        el.innerHTML = '<span style="color:var(--text-disabled)">&#x200b;</span>';
         return;
     }
     el.innerHTML = chunks
         .map((c) => {
-            const cls = [c.style.bold ? "font-semibold" : "", c.style.italic ? "italic" : ""]
+            const cls = [
+                c.style.bold ? "font-semibold" : "",
+                c.style.italic ? "italic" : "",
+            ]
                 .filter(Boolean)
                 .join(" ");
             const cs = chunkStyleAttr(c.style);
@@ -176,7 +189,12 @@ function getCaretScalarOffset(): number {
         return 0;
     }
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0 || !sel.focusNode || !el.contains(sel.focusNode)) {
+    if (
+        !sel ||
+        sel.rangeCount === 0 ||
+        !sel.focusNode ||
+        !el.contains(sel.focusNode)
+    ) {
         return scalarLen(normalizePlain(collectTextFromEditor(el)));
     }
     const r = document.createRange();
@@ -263,7 +281,10 @@ function pickStylePayload(style: TextStyle): Record<string, string | boolean> {
     return out;
 }
 
-function stylePayloadAtScalarOffset(chunks: TextChunk[], offset: number): Record<string, string | boolean> {
+function stylePayloadAtScalarOffset(
+    chunks: TextChunk[],
+    offset: number,
+): Record<string, string | boolean> {
     if (chunks.length === 0) {
         return {};
     }
@@ -399,6 +420,7 @@ function onEditorInput() {
 }
 
 function onBlur() {
+    isFocused.value = false;
     emit("format-clear");
     if (debounceTimer != null) {
         clearTimeout(debounceTimer);
@@ -439,11 +461,91 @@ function onHandleDragStart(ev: DragEvent) {
     }
     emit("drag-start", props.block.id);
 }
+
+function onEditorClick(ev: MouseEvent) {
+    ev.stopPropagation();
+}
 </script>
 
 <style scoped>
+.editor-block {
+    position: relative;
+    min-width: 0;
+    flex: 1;
+    border-radius: 7px;
+    padding: 2px 4px 2px 0;
+    transition:
+        background-color 120ms ease,
+        opacity 120ms ease;
+}
+
+.editor-block:hover,
+.editor-block.is-dragging,
+.editor-block.is-active {
+    background: rgb(255 255 255 / 0.025);
+}
+
+.drag-handle {
+    position: absolute;
+    top: 4px;
+    left: -30px;
+    display: flex;
+    width: 22px;
+    height: 22px;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--text-disabled);
+    cursor: grab;
+    opacity: 0;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease,
+        opacity 120ms ease;
+}
+
+.drag-handle:hover {
+    background: var(--bg-3);
+    color: var(--text-secondary);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.editor-block:hover .drag-handle,
+.editor-block.is-active .drag-handle {
+    opacity: 1;
+}
+
+.drag-handle span {
+    font-size: 12px;
+    letter-spacing: -0.12em;
+    line-height: 1;
+}
+
 .editor-text {
-    font-size: 14px;
+    min-height: 24px;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 16px;
     line-height: 24px;
+    outline: none;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+.editor-block.is-empty .editor-text::before {
+    content: "Start writing...";
+    color: var(--text-disabled);
+    pointer-events: none;
+}
+
+@media (max-width: 760px) {
+    .drag-handle {
+        left: -6px;
+    }
 }
 </style>

@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+pub mod password;
 pub mod service;
 
 use chrono::{DateTime, Utc};
@@ -10,11 +11,15 @@ use crate::user::User;
 pub struct RegisterInput {
     pub login: String,
     pub password: String,
+    pub device: String,
+    pub location: String,
 }
 
 pub struct LoginInput {
     pub login: String,
     pub password: String,
+    pub device: String,
+    pub location: String,
 }
 
 pub struct LogoutInput {
@@ -52,16 +57,22 @@ pub struct SessionView {
 pub struct Session {
     pub id: Uuid,
     pub user_id: Uuid,
+    pub device: String,
+    pub location: String,
     pub issued_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub revoked_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Clone)]
 pub struct ManagedSessionView {
     pub session_id: Uuid,
+    pub device: String,
+    pub location: String,
     pub issued_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub revoked_at: Option<DateTime<Utc>>,
     pub is_current: bool,
 }
@@ -88,20 +99,34 @@ pub trait SessionRepo {
         &self,
         user_id: Uuid,
         expires_at: DateTime<Utc>,
+        device: &str,
+        location: &str,
     ) -> Result<Session, AuthError>;
+
     async fn find_session(&self, session_id: Uuid) -> Result<Option<Session>, AuthError>;
+
+    async fn extend_session(
+        &self,
+        session_id: Uuid,
+        new_expires_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+    ) -> Result<(), AuthError>;
+
     async fn revoke_session(
         &self,
         session_id: Uuid,
         revoked_at: DateTime<Utc>,
     ) -> Result<(), AuthError>;
+
     async fn list_sessions_by_user(&self, user_id: Uuid) -> Result<Vec<Session>, AuthError>;
+
     async fn revoke_session_for_user(
         &self,
         user_id: Uuid,
         session_id: Uuid,
         revoked_at: DateTime<Utc>,
     ) -> Result<(), AuthError>;
+
     async fn revoke_sessions_for_user_except(
         &self,
         user_id: Uuid,
@@ -119,10 +144,17 @@ pub trait AuthUsecase {
     async fn register(&self, input: RegisterInput) -> Result<SessionView, AuthError>;
     async fn login(&self, input: LoginInput) -> Result<SessionView, AuthError>;
     async fn logout(&self, input: LogoutInput) -> Result<(), AuthError>;
-    async fn list_sessions(&self, input: ListSessionsInput) -> Result<Vec<ManagedSessionView>, AuthError>;
+    async fn list_sessions(
+        &self,
+        input: ListSessionsInput,
+    ) -> Result<Vec<ManagedSessionView>, AuthError>;
     async fn close_session(&self, input: CloseSessionInput) -> Result<(), AuthError>;
     async fn close_other_sessions(&self, input: CloseOtherSessionsInput) -> Result<u64, AuthError>;
-    async fn authorize_session(&self, session_id: Uuid) -> Result<AuthorizedSession, AuthError>;
+    /// Validates the session, applies sliding-window expiry refresh, returns identity and fresh cookie view.
+    async fn authorize_session(
+        &self,
+        session_id: Uuid,
+    ) -> Result<(AuthorizedSession, SessionView), AuthError>;
 }
 
 pub enum AuthTraceStep {

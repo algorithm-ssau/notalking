@@ -8,16 +8,18 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::auth::{
-    AuthError, AuthUsecase, CloseOtherSessionsInput, CloseSessionInput, ListSessionsInput,
-    LoginInput, LogoutInput, ManagedSessionView, RegisterInput,
+    AuthError, AuthUsecase, CloseOtherSessionsInput, ListSessionsInput, LoginInput, LogoutInput,
+    ManagedSessionView, RegisterInput, SessionView,
 };
 use crate::note::{CreateNoteInput, DeleteNoteInput, NoteError, NoteUsecase, TextPatch};
 use editor::content::Content;
 use editor::text::Style;
 
+use super::errors::ApiError;
 use super::state::AppState;
 
 pub async fn health_handler() -> StatusCode {
@@ -38,17 +40,21 @@ pub struct SessionResponse {
     pub expires_at: String,
 }
 
+/// Minimal identity for trusted services (e.g. Intelligence) that forward the session cookie.
 #[derive(Serialize)]
-pub struct ErrorResponse {
-    pub error: String,
-    pub hint: Option<String>,
+pub struct MeResponse {
+    pub user_id: String,
+    pub session_id: String,
 }
 
 #[derive(Serialize)]
 pub struct ManagedSessionResponse {
     pub session_id: String,
+    pub device: String,
+    pub location: String,
     pub issued_at: String,
     pub expires_at: String,
+    pub updated_at: String,
     pub revoked_at: Option<String>,
     pub is_current: bool,
 }
@@ -74,6 +80,7 @@ pub struct CreateNoteRequest {
 pub struct NoteResponse {
     pub id: String,
     pub title: String,
+    pub head_id: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -93,50 +100,97 @@ pub struct NotesQuery {
     pub per_page: Option<u64>,
 }
 
-fn map_auth_error(error: AuthError) -> (StatusCode, Json<ErrorResponse>) {
-    let (status, message, hint) = match error {
-        AuthError::LoginAlreadyTaken => (StatusCode::CONFLICT, "login already taken", None),
-        AuthError::InvalidCredentials => (StatusCode::UNAUTHORIZED, "invalid credentials", None),
-        AuthError::UserNotFound => (StatusCode::NOT_FOUND, "user not found", None),
-        AuthError::SessionNotFound => (StatusCode::NOT_FOUND, "session not found", None),
-        AuthError::SessionAlreadyRevoked => (StatusCode::CONFLICT, "session already revoked", None),
-        AuthError::SessionExpired => (StatusCode::UNAUTHORIZED, "session expired", None),
-        AuthError::CurrentSessionUseLogout => (
-            StatusCode::CONFLICT,
-            "cannot close current session with this endpoint",
-            Some("use POST /auth/logout for current session"),
-        ),
-        AuthError::Forbidden => (StatusCode::FORBIDDEN, "forbidden", None),
-        AuthError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal error", None),
-    };
-
-    (
-        status,
-        Json(ErrorResponse {
-            error: message.to_owned(),
-            hint: hint.map(str::to_owned),
-        }),
-    )
+#[derive(Deserialize)]
+pub struct SemanticSearchRequest {
+    pub query: String,
+    pub limit: Option<u64>,
 }
 
-fn map_note_error(error: NoteError) -> (StatusCode, Json<ErrorResponse>) {
-    let (status, message) = match error {
-        NoteError::InvalidInput => (StatusCode::BAD_REQUEST, "invalid note input"),
-        NoteError::NotFound => (StatusCode::NOT_FOUND, "note not found"),
-        NoteError::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
-        NoteError::BlockNotFound => (StatusCode::NOT_FOUND, "block not found"),
-        NoteError::CorruptBlocks => (StatusCode::INTERNAL_SERVER_ERROR, "note blocks are missing or invalid"),
-        NoteError::InvalidOperation => (StatusCode::BAD_REQUEST, "invalid block operation"),
-        NoteError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal error"),
-    };
+#[derive(Serialize)]
+pub struct SemanticHitResponse {
+    pub note_id: String,
+    pub block_id: String,
+    pub score: f32,
+}
 
-    (
+fn map_auth_error(error: AuthError) -> ApiError {
+    let (status, code, message) = match error {
+        AuthError::LoginAlreadyTaken => {
+            (StatusCode::CONFLICT, "login_taken", "login already taken")
+        }
+        AuthError::InvalidCredentials => (
+            StatusCode::UNAUTHORIZED,
+            "invalid_credentials",
+            "invalid credentials",
+        ),
+        AuthError::UserNotFound => (StatusCode::NOT_FOUND, "user_not_found", "user not found"),
+        AuthError::SessionNotFound => (
+            StatusCode::NOT_FOUND,
+            "session_not_found",
+            "session not found",
+        ),
+        AuthError::SessionAlreadyRevoked => (
+            StatusCode::CONFLICT,
+            "session_revoked",
+            "session already revoked",
+        ),
+        AuthError::SessionExpired => (
+            StatusCode::UNAUTHORIZED,
+            "session_expired",
+            "session expired",
+        ),
+        AuthError::CurrentSessionUseLogout => (
+            StatusCode::CONFLICT,
+            "use_logout",
+            "cannot close current session with this endpoint",
+        ),
+        AuthError::Forbidden => (StatusCode::FORBIDDEN, "forbidden", "forbidden"),
+        AuthError::Internal => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "internal_error",
+            "internal error",
+        ),
+    };
+    ApiError {
         status,
-        Json(ErrorResponse {
-            error: message.to_owned(),
-            hint: None,
-        }),
-    )
+        code,
+        message: message.to_owned(),
+        details: None,
+    }
+}
+
+fn map_note_error(error: NoteError) -> ApiError {
+    let (status, code, message) = match error {
+        NoteError::InvalidInput => (
+            StatusCode::BAD_REQUEST,
+            "invalid_input",
+            "invalid note input",
+        ),
+        NoteError::NotFound => (StatusCode::NOT_FOUND, "not_found", "note not found"),
+        NoteError::Forbidden => (StatusCode::FORBIDDEN, "forbidden", "forbidden"),
+        NoteError::BlockNotFound => (StatusCode::NOT_FOUND, "block_not_found", "block not found"),
+        NoteError::CorruptBlocks => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "corrupt_blocks",
+            "note blocks are missing or invalid",
+        ),
+        NoteError::InvalidOperation => (
+            StatusCode::BAD_REQUEST,
+            "invalid_operation",
+            "invalid block operation",
+        ),
+        NoteError::Internal => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "internal_error",
+            "internal error",
+        ),
+    };
+    ApiError {
+        status,
+        code,
+        message: message.to_owned(),
+        details: None,
+    }
 }
 
 fn into_session_response(view: crate::auth::SessionView) -> SessionResponse {
@@ -151,8 +205,11 @@ fn into_session_response(view: crate::auth::SessionView) -> SessionResponse {
 fn into_managed_session_response(view: ManagedSessionView) -> ManagedSessionResponse {
     ManagedSessionResponse {
         session_id: view.session_id.to_string(),
+        device: view.device,
+        location: view.location,
         issued_at: view.issued_at.to_rfc3339(),
         expires_at: view.expires_at.to_rfc3339(),
+        updated_at: view.updated_at.to_rfc3339(),
         revoked_at: view.revoked_at.map(|value| value.to_rfc3339()),
         is_current: view.is_current,
     }
@@ -162,6 +219,7 @@ fn into_note_response(note: crate::note::Note) -> NoteResponse {
     NoteResponse {
         id: note.id.to_string(),
         title: note.title,
+        head_id: note.head_id.map(|h| h.to_string()),
         created_at: note.created_at.to_rfc3339(),
         updated_at: note.updated_at.to_rfc3339(),
     }
@@ -205,7 +263,6 @@ impl From<StyleDto> for Style {
     }
 }
 
-/// Optional `bold` / `italic` / `color` at the same JSON level as `op` (in addition to nested `style`).
 #[derive(Deserialize, Default)]
 pub struct LooseStyleFields {
     #[serde(default)]
@@ -269,101 +326,159 @@ pub enum BlockPatchBody {
 
 const SESSION_COOKIE_NAME: &str = "session_id";
 
-fn build_session_cookie(session_id: Uuid) -> String {
-    format!(
-        "{SESSION_COOKIE_NAME}={session_id}; HttpOnly; Path=/; SameSite=Lax; Max-Age=86400"
-    )
+fn client_meta(headers: &HeaderMap) -> (String, String) {
+    let device = headers
+        .get(axum::http::header::USER_AGENT)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_owned();
+    let location = headers
+        .get("cf-ipcountry")
+        .or_else(|| headers.get("x-geo-country"))
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("unknown")
+        .to_owned();
+    (device, location)
 }
 
-fn build_clear_session_cookie() -> String {
-    format!("{SESSION_COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0")
+fn session_cookie_value(session_id: Uuid, secure: bool) -> String {
+    let mut s = format!(
+        "{SESSION_COOKIE_NAME}={session_id}; HttpOnly; Path=/; SameSite=Lax; Max-Age=604800"
+    );
+    if secure {
+        s.push_str("; Secure");
+    }
+    s
 }
 
-fn attach_cookie(
-    mut response: Response,
-    cookie_value: String,
-) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
-    let header_value = HeaderValue::from_str(&cookie_value).map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "failed to write session cookie".to_owned(),
-                hint: None,
-            }),
-        )
+fn clear_session_cookie(secure: bool) -> String {
+    let mut s = format!("{SESSION_COOKIE_NAME}=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0");
+    if secure {
+        s.push_str("; Secure");
+    }
+    s
+}
+
+fn attach_cookie(mut response: Response, cookie_value: String) -> Result<Response, ApiError> {
+    let header_value = HeaderValue::from_str(&cookie_value).map_err(|_| ApiError {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        code: "cookie_write_failed",
+        message: "failed to write session cookie".to_owned(),
+        details: None,
     })?;
     response.headers_mut().append(SET_COOKIE, header_value);
     Ok(response)
 }
 
-fn session_id_from_cookie(headers: &HeaderMap) -> Result<Uuid, (StatusCode, Json<ErrorResponse>)> {
+fn merge_session_refresh(
+    response: Response,
+    refresh: SessionView,
+    secure: bool,
+) -> Result<Response, ApiError> {
+    attach_cookie(response, session_cookie_value(refresh.session_id, secure))
+}
+
+fn session_id_from_cookie(headers: &HeaderMap) -> Result<Uuid, ApiError> {
     let cookie_headers = headers.get_all(COOKIE);
     for raw in cookie_headers {
         if let Ok(cookie_header) = raw.to_str() {
             for part in cookie_header.split(';') {
                 let item = part.trim();
                 if let Some(value) = item.strip_prefix(&format!("{SESSION_COOKIE_NAME}=")) {
-                    return Uuid::parse_str(value).map_err(|_| {
-                        (
-                            StatusCode::BAD_REQUEST,
-                            Json(ErrorResponse {
-                                error: "invalid session cookie".to_owned(),
-                                hint: None,
-                            }),
-                        )
+                    return Uuid::parse_str(value).map_err(|_| ApiError {
+                        status: StatusCode::BAD_REQUEST,
+                        code: "invalid_session_cookie",
+                        message: "invalid session cookie".to_owned(),
+                        details: None,
                     });
                 }
             }
         }
     }
 
-    Err((
-        StatusCode::UNAUTHORIZED,
-        Json(ErrorResponse {
-            error: "session cookie is missing".to_owned(),
-            hint: None,
-        }),
-    ))
+    Err(ApiError {
+        status: StatusCode::UNAUTHORIZED,
+        code: "missing_session",
+        message: "session cookie is missing".to_owned(),
+        details: None,
+    })
 }
 
 pub async fn register_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<CredentialsRequest>,
-) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, ApiError> {
+    let (device, location) = client_meta(&headers);
     let session = state
         .auth
         .register(RegisterInput {
             login: payload.login,
             password: payload.password,
+            device,
+            location,
         })
         .await
         .map_err(map_auth_error)?;
 
-    let response = (StatusCode::CREATED, Json(into_session_response(session.clone()))).into_response();
-    attach_cookie(response, build_session_cookie(session.session_id))
+    let response = (
+        StatusCode::CREATED,
+        Json(into_session_response(session.clone())),
+    )
+        .into_response();
+    attach_cookie(
+        response,
+        session_cookie_value(session.session_id, state.config.cookie_secure),
+    )
 }
 
 pub async fn login_handler(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<CredentialsRequest>,
-) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, ApiError> {
+    let (device, location) = client_meta(&headers);
     let session = state
         .auth
         .login(LoginInput {
             login: payload.login,
             password: payload.password,
+            device,
+            location,
         })
         .await
         .map_err(map_auth_error)?;
 
     let response = Json(into_session_response(session.clone())).into_response();
-    attach_cookie(response, build_session_cookie(session.session_id))
+    attach_cookie(
+        response,
+        session_cookie_value(session.session_id, state.config.cookie_secure),
+    )
+}
+
+pub async fn me_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Response, ApiError> {
+    let session_id = session_id_from_cookie(&headers)?;
+    let (auth, refresh) = state
+        .auth
+        .authorize_session(session_id)
+        .await
+        .map_err(map_auth_error)?;
+
+    let body = Json(MeResponse {
+        user_id: auth.user_id.to_string(),
+        session_id: auth.session_id.to_string(),
+    })
+    .into_response();
+    merge_session_refresh(body, refresh, state.config.cookie_secure)
 }
 
 pub async fn logout_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
-) -> Result<Response, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, ApiError> {
     let session_id = session_id_from_cookie(&headers)?;
 
     state
@@ -373,60 +488,76 @@ pub async fn logout_handler(
         .map_err(map_auth_error)?;
 
     let response = StatusCode::NO_CONTENT.into_response();
-    attach_cookie(response, build_clear_session_cookie())
+    attach_cookie(response, clear_session_cookie(state.config.cookie_secure))
 }
 
 pub async fn list_sessions_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
-) -> Result<Json<SessionsListResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let current_session_id = session_id_from_cookie(&headers)?;
+) -> Result<Response, ApiError> {
+    let session_id = session_id_from_cookie(&headers)?;
     let sessions = state
         .auth
-        .list_sessions(ListSessionsInput { current_session_id })
+        .list_sessions(ListSessionsInput {
+            current_session_id: session_id,
+        })
         .await
         .map_err(map_auth_error)?;
 
-    Ok(Json(SessionsListResponse {
+    let refresh = state
+        .auth
+        .authorize_session(session_id)
+        .await
+        .map_err(map_auth_error)?
+        .1;
+
+    let body = Json(SessionsListResponse {
         sessions: sessions
             .into_iter()
             .map(into_managed_session_response)
             .collect(),
-    }))
+    })
+    .into_response();
+    merge_session_refresh(body, refresh, state.config.cookie_secure)
 }
 
 pub async fn close_session_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(target_session_id): Path<String>,
-) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, ApiError> {
     let current_session_id = session_id_from_cookie(&headers)?;
-    let target_session_id = Uuid::parse_str(&target_session_id).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid target session_id".to_owned(),
-                hint: None,
-            }),
-        )
+    let target_session_id = Uuid::parse_str(&target_session_id).map_err(|_| ApiError {
+        status: StatusCode::BAD_REQUEST,
+        code: "invalid_session_id",
+        message: "invalid target session_id".to_owned(),
+        details: None,
     })?;
 
     state
         .auth
-        .close_session(CloseSessionInput {
+        .close_session(crate::auth::CloseSessionInput {
             current_session_id,
             target_session_id,
         })
         .await
         .map_err(map_auth_error)?;
 
-    Ok(StatusCode::NO_CONTENT)
+    let refresh = state
+        .auth
+        .authorize_session(current_session_id)
+        .await
+        .map_err(map_auth_error)?
+        .1;
+
+    let body = StatusCode::NO_CONTENT.into_response();
+    merge_session_refresh(body, refresh, state.config.cookie_secure)
 }
 
 pub async fn close_other_sessions_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
-) -> Result<Json<CloseOtherSessionsResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, ApiError> {
     let current_session_id = session_id_from_cookie(&headers)?;
     let closed_count = state
         .auth
@@ -434,16 +565,24 @@ pub async fn close_other_sessions_handler(
         .await
         .map_err(map_auth_error)?;
 
-    Ok(Json(CloseOtherSessionsResponse { closed_count }))
+    let refresh = state
+        .auth
+        .authorize_session(current_session_id)
+        .await
+        .map_err(map_auth_error)?
+        .1;
+
+    let body = Json(CloseOtherSessionsResponse { closed_count }).into_response();
+    merge_session_refresh(body, refresh, state.config.cookie_secure)
 }
 
 pub async fn create_note_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(payload): Json<CreateNoteRequest>,
-) -> Result<(StatusCode, Json<NoteResponse>), (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, ApiError> {
     let session_id = session_id_from_cookie(&headers)?;
-    let session = state
+    let (auth, refresh) = state
         .auth
         .authorize_session(session_id)
         .await
@@ -452,23 +591,26 @@ pub async fn create_note_handler(
     let note = state
         .note
         .create_note(CreateNoteInput {
-            user_id: session.user_id,
+            user_id: auth.user_id,
             title: payload.title,
             initial_text: payload.body,
         })
         .await
         .map_err(map_note_error)?;
 
-    Ok((StatusCode::CREATED, Json(into_note_response(note))))
+    state.notify_embedding(auth.user_id, note.id);
+
+    let body = (StatusCode::CREATED, Json(into_note_response(note))).into_response();
+    merge_session_refresh(body, refresh, state.config.cookie_secure)
 }
 
 pub async fn list_notes_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Query(query): Query<NotesQuery>,
-) -> Result<Json<NotesListResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, ApiError> {
     let session_id = session_id_from_cookie(&headers)?;
-    let session = state
+    let (auth, refresh) = state
         .auth
         .authorize_session(session_id)
         .await
@@ -476,7 +618,7 @@ pub async fn list_notes_handler(
 
     let notes = state
         .note
-        .list_notes(session.user_id)
+        .list_notes(auth.user_id)
         .await
         .map_err(map_note_error)?;
 
@@ -497,72 +639,69 @@ pub async fn list_notes_handler(
         notes[start..end].to_vec()
     };
 
-    Ok(Json(NotesListResponse {
+    let body = Json(NotesListResponse {
         notes: paged_notes.into_iter().map(into_note_response).collect(),
         page,
         per_page,
         total,
         total_pages,
-    }))
+    })
+    .into_response();
+    merge_session_refresh(body, refresh, state.config.cookie_secure)
 }
 
 pub async fn delete_note_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(note_id): Path<String>,
-) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, ApiError> {
     let session_id = session_id_from_cookie(&headers)?;
-    let session = state
+    let (auth, refresh) = state
         .auth
         .authorize_session(session_id)
         .await
         .map_err(map_auth_error)?;
-    let note_id = Uuid::parse_str(&note_id).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid note id".to_owned(),
-                hint: None,
-            }),
-        )
+    let note_id = Uuid::parse_str(&note_id).map_err(|_| ApiError {
+        status: StatusCode::BAD_REQUEST,
+        code: "invalid_note_id",
+        message: "invalid note id".to_owned(),
+        details: None,
     })?;
 
     state
         .note
         .delete_note(DeleteNoteInput {
-            user_id: session.user_id,
+            user_id: auth.user_id,
             note_id,
         })
         .await
         .map_err(map_note_error)?;
 
-    Ok(StatusCode::NO_CONTENT)
+    let body = StatusCode::NO_CONTENT.into_response();
+    merge_session_refresh(body, refresh, state.config.cookie_secure)
 }
 
 pub async fn list_note_blocks_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(note_id): Path<String>,
-) -> Result<Json<NoteBlocksResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, ApiError> {
     let session_id = session_id_from_cookie(&headers)?;
-    let session = state
+    let (auth, refresh) = state
         .auth
         .authorize_session(session_id)
         .await
         .map_err(map_auth_error)?;
-    let note_id = Uuid::parse_str(&note_id).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid note id".to_owned(),
-                hint: None,
-            }),
-        )
+    let note_id = Uuid::parse_str(&note_id).map_err(|_| ApiError {
+        status: StatusCode::BAD_REQUEST,
+        code: "invalid_note_id",
+        message: "invalid note id".to_owned(),
+        details: None,
     })?;
 
     let blocks = state
         .note
-        .list_blocks(session.user_id, note_id)
+        .list_blocks(auth.user_id, note_id)
         .await
         .map_err(map_note_error)?;
 
@@ -571,7 +710,11 @@ pub async fn list_note_blocks_handler(
         .map(|b| serde_json::to_value(b).unwrap_or(serde_json::Value::Null))
         .collect();
 
-    Ok(Json(NoteBlocksResponse { blocks: json_blocks }))
+    let body = Json(NoteBlocksResponse {
+        blocks: json_blocks,
+    })
+    .into_response();
+    merge_session_refresh(body, refresh, state.config.cookie_secure)
 }
 
 pub async fn create_note_block_handler(
@@ -579,96 +722,88 @@ pub async fn create_note_block_handler(
     headers: HeaderMap,
     Path(note_id): Path<String>,
     Json(payload): Json<CreateBlockRequest>,
-) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, ApiError> {
     let session_id = session_id_from_cookie(&headers)?;
-    let session = state
+    let (auth, refresh) = state
         .auth
         .authorize_session(session_id)
         .await
         .map_err(map_auth_error)?;
-    let note_id = Uuid::parse_str(&note_id).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid note id".to_owned(),
-                hint: None,
-            }),
-        )
+    let note_id = Uuid::parse_str(&note_id).map_err(|_| ApiError {
+        status: StatusCode::BAD_REQUEST,
+        code: "invalid_note_id",
+        message: "invalid note id".to_owned(),
+        details: None,
     })?;
 
     let after_id = match &payload.after_id {
         None => None,
-        Some(s) => Some(Uuid::parse_str(s).map_err(|_| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(ErrorResponse {
-                    error: "invalid after_id".to_owned(),
-                    hint: None,
-                }),
-            )
+        Some(s) => Some(Uuid::parse_str(s).map_err(|_| ApiError {
+            status: StatusCode::BAD_REQUEST,
+            code: "invalid_after_id",
+            message: "invalid after_id".to_owned(),
+            details: None,
         })?),
     };
 
     let content = match payload.content {
-        CreateBlockContent::Text { text } => Content::Text(editor::text::TextBlock::from_text(&text)),
+        CreateBlockContent::Text { text } => {
+            Content::Text(editor::text::TextBlock::from_text(&text))
+        }
     };
 
     let block = state
         .note
-        .create_block(session.user_id, note_id, after_id, content)
+        .create_block(auth.user_id, note_id, after_id, content)
         .await
         .map_err(map_note_error)?;
 
-    let body = serde_json::to_value(block).map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "failed to serialize block".to_owned(),
-                hint: None,
-            }),
-        )
-    })?;
+    state.notify_embedding(auth.user_id, note_id);
 
-    Ok((StatusCode::CREATED, Json(body)))
+    let body = serde_json::to_value(&block).map_err(|_| ApiError {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        code: "serialize_failed",
+        message: "failed to serialize block".to_owned(),
+        details: None,
+    })?;
+    let resp = (StatusCode::CREATED, Json(body)).into_response();
+    merge_session_refresh(resp, refresh, state.config.cookie_secure)
 }
 
 pub async fn delete_note_block_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path((note_id, block_id)): Path<(String, String)>,
-) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, ApiError> {
     let session_id = session_id_from_cookie(&headers)?;
-    let session = state
+    let (auth, refresh) = state
         .auth
         .authorize_session(session_id)
         .await
         .map_err(map_auth_error)?;
-    let note_id = Uuid::parse_str(&note_id).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid note id".to_owned(),
-                hint: None,
-            }),
-        )
+    let note_id = Uuid::parse_str(&note_id).map_err(|_| ApiError {
+        status: StatusCode::BAD_REQUEST,
+        code: "invalid_note_id",
+        message: "invalid note id".to_owned(),
+        details: None,
     })?;
-    let block_id = Uuid::parse_str(&block_id).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid block id".to_owned(),
-                hint: None,
-            }),
-        )
+    let block_id = Uuid::parse_str(&block_id).map_err(|_| ApiError {
+        status: StatusCode::BAD_REQUEST,
+        code: "invalid_block_id",
+        message: "invalid block id".to_owned(),
+        details: None,
     })?;
 
     state
         .note
-        .delete_block(session.user_id, note_id, block_id)
+        .delete_block(auth.user_id, note_id, block_id)
         .await
         .map_err(map_note_error)?;
 
-    Ok(StatusCode::NO_CONTENT)
+    state.notify_embedding(auth.user_id, note_id);
+
+    let body = StatusCode::NO_CONTENT.into_response();
+    merge_session_refresh(body, refresh, state.config.cookie_secure)
 }
 
 pub async fn patch_note_block_handler(
@@ -676,30 +811,24 @@ pub async fn patch_note_block_handler(
     headers: HeaderMap,
     Path((note_id, block_id)): Path<(String, String)>,
     Json(payload): Json<BlockPatchBody>,
-) -> Result<StatusCode, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, ApiError> {
     let session_id = session_id_from_cookie(&headers)?;
-    let session = state
+    let (auth, refresh) = state
         .auth
         .authorize_session(session_id)
         .await
         .map_err(map_auth_error)?;
-    let note_id = Uuid::parse_str(&note_id).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid note id".to_owned(),
-                hint: None,
-            }),
-        )
+    let note_id = Uuid::parse_str(&note_id).map_err(|_| ApiError {
+        status: StatusCode::BAD_REQUEST,
+        code: "invalid_note_id",
+        message: "invalid note id".to_owned(),
+        details: None,
     })?;
-    let block_id = Uuid::parse_str(&block_id).map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "invalid block id".to_owned(),
-                hint: None,
-            }),
-        )
+    let block_id = Uuid::parse_str(&block_id).map_err(|_| ApiError {
+        status: StatusCode::BAD_REQUEST,
+        code: "invalid_block_id",
+        message: "invalid block id".to_owned(),
+        details: None,
     })?;
 
     match payload {
@@ -709,37 +838,25 @@ pub async fn patch_note_block_handler(
         } => {
             let after_uuid = match &after_id {
                 None => None,
-                Some(s) => Some(Uuid::parse_str(s).map_err(|_| {
-                    (
-                        StatusCode::BAD_REQUEST,
-                        Json(ErrorResponse {
-                            error: "invalid after_id".to_owned(),
-                            hint: None,
-                        }),
-                    )
+                Some(s) => Some(Uuid::parse_str(s).map_err(|_| ApiError {
+                    status: StatusCode::BAD_REQUEST,
+                    code: "invalid_after_id",
+                    message: "invalid after_id".to_owned(),
+                    details: None,
                 })?),
             };
             let before_uuid = match &before_id {
                 None => None,
-                Some(s) => Some(Uuid::parse_str(s).map_err(|_| {
-                    (
-                        StatusCode::BAD_REQUEST,
-                        Json(ErrorResponse {
-                            error: "invalid before_id".to_owned(),
-                            hint: None,
-                        }),
-                    )
+                Some(s) => Some(Uuid::parse_str(s).map_err(|_| ApiError {
+                    status: StatusCode::BAD_REQUEST,
+                    code: "invalid_before_id",
+                    message: "invalid before_id".to_owned(),
+                    details: None,
                 })?),
             };
             state
                 .note
-                .move_block(
-                    session.user_id,
-                    note_id,
-                    block_id,
-                    after_uuid,
-                    before_uuid,
-                )
+                .move_block(auth.user_id, note_id, block_id, after_uuid, before_uuid)
                 .await
                 .map_err(map_note_error)?;
         }
@@ -752,7 +869,7 @@ pub async fn patch_note_block_handler(
             state
                 .note
                 .apply_text_patch(
-                    session.user_id,
+                    auth.user_id,
                     note_id,
                     block_id,
                     TextPatch::InsertText {
@@ -768,7 +885,7 @@ pub async fn patch_note_block_handler(
             state
                 .note
                 .apply_text_patch(
-                    session.user_id,
+                    auth.user_id,
                     note_id,
                     block_id,
                     TextPatch::DeleteRange { start, end },
@@ -783,7 +900,7 @@ pub async fn patch_note_block_handler(
             state
                 .note
                 .apply_text_patch(
-                    session.user_id,
+                    auth.user_id,
                     note_id,
                     block_id,
                     TextPatch::DeleteAt {
@@ -803,7 +920,7 @@ pub async fn patch_note_block_handler(
             state
                 .note
                 .apply_text_patch(
-                    session.user_id,
+                    auth.user_id,
                     note_id,
                     block_id,
                     TextPatch::EnableFormatting {
@@ -824,7 +941,7 @@ pub async fn patch_note_block_handler(
             state
                 .note
                 .apply_text_patch(
-                    session.user_id,
+                    auth.user_id,
                     note_id,
                     block_id,
                     TextPatch::DisableFormatting {
@@ -838,5 +955,51 @@ pub async fn patch_note_block_handler(
         }
     }
 
-    Ok(StatusCode::NO_CONTENT)
+    state.notify_embedding(auth.user_id, note_id);
+
+    let body = StatusCode::NO_CONTENT.into_response();
+    merge_session_refresh(body, refresh, state.config.cookie_secure)
+}
+
+pub async fn semantic_search_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<SemanticSearchRequest>,
+) -> Result<Response, ApiError> {
+    let session_id = session_id_from_cookie(&headers)?;
+    let (auth, refresh) = state
+        .auth
+        .authorize_session(session_id)
+        .await
+        .map_err(map_auth_error)?;
+
+    let emb = state.embedding.as_ref().ok_or(ApiError {
+        status: StatusCode::SERVICE_UNAVAILABLE,
+        code: "embeddings_disabled",
+        message: "semantic search is not configured".to_owned(),
+        details: None,
+    })?;
+
+    let limit = body.limit.unwrap_or(10).min(50);
+    let hits = emb
+        .semantic_search(auth.user_id, &body.query, limit)
+        .await
+        .map_err(|e| ApiError {
+            status: StatusCode::BAD_GATEWAY,
+            code: "search_failed",
+            message: e,
+            details: None,
+        })?;
+
+    let hits_json: Vec<SemanticHitResponse> = hits
+        .into_iter()
+        .map(|(n, b, s)| SemanticHitResponse {
+            note_id: n.to_string(),
+            block_id: b.to_string(),
+            score: s,
+        })
+        .collect();
+
+    let resp = Json(json!({ "hits": hits_json })).into_response();
+    merge_session_refresh(resp, refresh, state.config.cookie_secure)
 }

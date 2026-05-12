@@ -1,0 +1,31 @@
+set shell := ["zsh", "-cu"]
+
+default:
+    @just --list
+
+# Install package in editable mode (venv recommended).
+install:
+    pip install -e .
+
+# Regenerate Python gRPC stubs from common/proto.
+gen-proto:
+    if [ -x .venv/bin/python ]; then py=.venv/bin/python; else py=python3; fi; \
+    "$py" -m grpc_tools.protoc \
+      -I../common/proto \
+      --python_out=src \
+      --grpc_python_out=src \
+      ../common/proto/notalking/v1/core.proto
+
+# Run API server (activate .venv first or use `pip install -e .`).
+dev:
+    export INTELLIGENCE_CORE_HTTP_URL="${INTELLIGENCE_CORE_HTTP_URL:-http://127.0.0.1:40000}" && \
+    export INTELLIGENCE_CORE_GRPC_URL="${INTELLIGENCE_CORE_GRPC_URL:-127.0.0.1:50051}" && \
+    if [ -x .venv/bin/notalking-intelligence ]; then \
+      .venv/bin/notalking-intelligence; \
+    elif python3 -c 'import uvicorn' >/dev/null 2>&1; then \
+      PYTHONPATH=src python3 -m notalking_intelligence; \
+    else \
+      echo "Intelligence dependencies are not installed."; \
+      echo "Run: just install"; \
+      exit 1; \
+    fi

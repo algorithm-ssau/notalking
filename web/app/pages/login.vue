@@ -1,0 +1,208 @@
+<template>
+    <main class="auth-page">
+        <div class="auth-glow" aria-hidden="true" />
+        <div class="auth-wrap">
+            <UiAppLogo class="auth-logo" />
+            <section
+                class="auth-card surface-card"
+                :class="{ 'is-shaking': shaking }"
+                aria-labelledby="login-title"
+            >
+                <div class="auth-heading">
+                    <h1 id="login-title">Welcome back</h1>
+                    <p>Sign in to your Notalking workspace.</p>
+                </div>
+
+                <form class="auth-form" @submit.prevent="doLogin">
+                    <label class="form-label">
+                        Email
+                        <input
+                            v-model="email"
+                            class="input"
+                            type="email"
+                            autocomplete="username"
+                            placeholder="you@example.com"
+                            required
+                        />
+                    </label>
+                    <label class="form-label">
+                        Password
+                        <input
+                            v-model="password"
+                            class="input"
+                            type="password"
+                            autocomplete="current-password"
+                            placeholder="Your password"
+                            required
+                        />
+                    </label>
+
+                    <a class="forgot-link" href="#" @click.prevent>Forgot password?</a>
+
+                    <p v-if="authError" class="error-chip" role="alert">
+                        {{ authError }}
+                    </p>
+
+                    <button class="btn btn-primary auth-submit" type="submit" :disabled="submitting">
+                        {{ submitting ? "Signing in..." : "Sign in" }}
+                    </button>
+                </form>
+
+                <p class="auth-switch">
+                    Don't have an account?
+                    <NuxtLink to="/register">Register</NuxtLink>
+                </p>
+            </section>
+        </div>
+    </main>
+</template>
+
+<script setup lang="ts">
+import { getCoreErrorMessage } from "~/utils/coreErrors";
+
+const api = useCoreApi();
+const sessionStore = useSessionStore();
+const email = ref("");
+const password = ref("");
+const authError = ref("");
+const submitting = ref(false);
+const shaking = ref(false);
+
+async function doLogin() {
+    if (submitting.value) {
+        return;
+    }
+    authError.value = "";
+    submitting.value = true;
+    try {
+        await api.login(email.value.trim(), password.value);
+        sessionStore.clear();
+        await navigateTo({ path: "/app" });
+    } catch (e: unknown) {
+        authError.value = getCoreErrorMessage(e, "Login failed");
+        triggerShake();
+    } finally {
+        submitting.value = false;
+    }
+}
+
+function triggerShake() {
+    shaking.value = false;
+    requestAnimationFrame(() => {
+        shaking.value = true;
+        window.setTimeout(() => {
+            shaking.value = false;
+        }, 360);
+    });
+}
+</script>
+
+<style scoped>
+.auth-page {
+    position: relative;
+    display: grid;
+    min-height: 100vh;
+    place-items: center;
+    overflow: hidden;
+    background: var(--bg-base);
+    padding: 24px;
+}
+
+.auth-glow {
+    display: none;
+}
+
+.auth-wrap {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    width: min(390px, 100%);
+    justify-items: center;
+    gap: 22px;
+}
+
+.auth-logo {
+    justify-self: center;
+}
+
+.auth-card {
+    width: 100%;
+    border-color: var(--bg-3);
+    border-radius: var(--r-card);
+    background:
+        linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent),
+        var(--bg-2);
+    padding: 32px;
+    box-shadow: var(--shadow-soft);
+}
+
+.auth-card.is-shaking {
+    animation: shake 360ms ease both;
+}
+
+.auth-heading {
+    text-align: center;
+}
+
+.auth-heading h1 {
+    margin: 0;
+    color: var(--text-primary);
+    font-family: var(--font-heading);
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 40px;
+}
+
+.auth-heading p,
+.auth-switch {
+    margin: 8px 0 0;
+    color: var(--text-tertiary);
+    font-size: 16px;
+    line-height: 24px;
+}
+
+.auth-form {
+    display: grid;
+    gap: 14px;
+    margin-top: 24px;
+}
+
+.forgot-link {
+    justify-self: end;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 24px;
+    text-decoration: none;
+}
+
+.forgot-link:hover,
+.auth-switch a:hover {
+    text-decoration: underline;
+}
+
+.auth-submit {
+    width: 100%;
+    margin-top: 2px;
+}
+
+.auth-switch {
+    text-align: center;
+}
+
+.auth-switch a {
+    color: var(--text-primary);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+@media (max-width: 480px) {
+    .auth-page {
+        padding-inline: 16px;
+    }
+
+    .auth-card {
+        padding: 22px;
+    }
+}
+</style>

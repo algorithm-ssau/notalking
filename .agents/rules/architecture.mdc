@@ -1,0 +1,57 @@
+---
+description: Clean architecture boundaries for web (TypeScript), Core (Rust), and Intelligence (Python)
+alwaysApply: true
+---
+
+# Architecture (monorepo)
+
+Keep **boundaries explicit**: UI talks to HTTP APIs, not to databases or other services’ internals. **Core** and **Intelligence** own their data and contracts; **Web** is a client. Reuse the sync contract in `common/proto/**` for service-to-service calls -- do not invent a parallel RPC story.
+
+## TypeScript UI (`web/`)
+
+**Structure.** Separate **view** (Vue pages/components) from **application logic** (composables, small stores) and from **infrastructure** (API clients, cookie/session helpers, generated types). Colocate feature UI with its composables when it keeps cohesion; avoid a single dump folder for all API calls.
+
+**Data flow.** Prefer **unidirectional** flow: user action -> composable or store -> API client -> server response -> typed state update. Do not mutate shared cross-feature singletons from random components.
+
+**Types.** **Strict typing** at module boundaries: DTOs and store state should match server contracts. Narrow `any`; use shared types or generated clients when available.
+
+**Side effects.** Centralize **HTTP** in a small set of clients (e.g. Core vs Intelligence base URLs). No raw `fetch` scattered with duplicated error handling in every file.
+
+**State.** **Pinia** for cross-route or session-wide state; local `ref`/`computed` for leaf components. Do not mirror the whole server model in the client -- store what the UI needs.
+
+**Nuxt.** Use **server middleware and runtime config** for environment-specific behavior; keep secrets off the client bundle.
+
+## Rust backend (`core/`)
+
+**Layers.** A clear path such as **HTTP handlers -> application/use-cases -> domain (editor crate) -> persistence ports**. Handlers stay thin: parse, authorize, call one use-case, map errors to HTTP. **No SQL in handlers.**
+
+**Domain.** The **editor and note invariants** live in pure modules (e.g. `crates/editor`) with **no** Axum, `sqlx`, or HTTP types. This keeps the model testable and portable.
+
+**Errors.** Prefer **typed errors** in the domain; map to HTTP at the edge. **Fail fast** on corrupt or forbidden state -- do not swallow errors for convenience.
+
+**Async and I/O.** **Tokio** for concurrency; keep blocking work off the runtime. **Transactions** for linked-list and note mutations: one use-case, one transaction where the spec requires atomicity.
+
+**Adapters.** External systems (Qdrant, Redis, embedding providers) sit behind **small traits** or modules so core logic does not depend on vendor SDK shapes.
+
+**Config.** Load settings with the precedence in `docs/SPEC.md` (flags, env, defaults). No hard-coded URLs in library code.
+
+## Python backend (`intelligence/`)
+
+**Layout.** **Packages or feature modules** with clear names (e.g. `llm`, `v2t`, `api`); avoid one flat `utils.py` that accumulates everything. **FastAPI** routers are thin: validate, call a service, return DTOs.
+
+**Services.** Business logic in **classes or functions** that do not import framework globals. **Dependencies** (settings, HTTP clients to Ollama, etc.) are **injected** or created in a small composition root, not read from the global environment in deep call stacks.
+
+**Streaming.** **Async generators** or response streams for LLM and V2T; keep cancellation and client disconnect handling at the API boundary.
+
+**Types.** Use **type hints** on public functions and Pydantic models for request/response bodies. This documents the contract and matches FastAPI.
+
+**Config.** Same idea as Core: **pydantic-settings** (or equivalent) with env + optional CLI, aligned with **flags > env > defaults** for anything that must mirror Core’s deployment story.
+
+**Integration with Core.** Call Core only through **defined clients** (gRPC from `common/proto` when present, or explicit HTTP); never duplicate note storage or session authority in Intelligence.
+
+## Cross-cutting (all three)
+
+- **One responsibility per module**; if a file does three unrelated things, split it.
+- **Dependencies point inward** toward domain and policies, not outward toward frameworks.
+- **No duplicate source of truth** for sync or product rules: **SPEC and proto**, not ad-hoc copies in code comments.
+- Prefer **explicit** error paths and logging hooks over silent fallback -- consistent with `docs/SPEC.md` and repo AGENTS rules.

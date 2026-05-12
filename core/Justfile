@@ -3,5 +3,24 @@ set shell := ["zsh", "-cu"]
 default:
     @just --list
 
+# Default SQLite under `core/data/` (path is resolved to the crate root, not your shell cwd).
 run:
-    RUST_LOG=info cargo run
+    RUST_LOG="${RUST_LOG:-info}" \
+    CORE_GRPC_BIND="${CORE_GRPC_BIND:-127.0.0.1:50051}" \
+    cargo run
+
+# Use when Docker Compose is up: same env defaults as the repo-root `just run` (Ollama embeddings).
+run-with-compose:
+    RUST_LOG="${RUST_LOG:-info}" \
+    DATABASE_URL="${DATABASE_URL:-postgres://notalking:notalking@127.0.0.1:5432/notalking}" \
+    REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}" \
+    QDRANT_URL="${QDRANT_URL:-http://127.0.0.1:6334}" \
+    QDRANT_COLLECTION="${QDRANT_COLLECTION:-notalking_embed_ollama}" \
+    NATS_URL="${NATS_URL:-nats://127.0.0.1:4222}" \
+    CORE_GRPC_BIND="${CORE_GRPC_BIND:-127.0.0.1:50051}" \
+    EMBEDDING_PROVIDER_URL="${EMBEDDING_PROVIDER_URL:-http://127.0.0.1:11434/v1}" \
+    EMBEDDING_MODEL="${EMBEDDING_MODEL:-nomic-embed-text-v2-moe}" \
+    CORE_EMBEDDING_VECTOR_DIMENSIONS="${CORE_EMBEDDING_VECTOR_DIMENSIONS:-768}" \
+    EMBEDDING_QUERY_PREFIX="${EMBEDDING_QUERY_PREFIX:-search_query: }" \
+    EMBEDDING_DOCUMENT_PREFIX="${EMBEDDING_DOCUMENT_PREFIX:-search_document: }" \
+    cargo run
